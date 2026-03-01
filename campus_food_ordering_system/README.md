@@ -1,48 +1,72 @@
-# campus_food_ordering_system
+# Fresco's Pizza - Campus Food Ordering System
 
-A new Flutter project.
+A comprehensive food ordering solution featuring a Flutter mobile application and an interactive HTML/JS prototype.
 
-## Getting Started
+## 📱 Flutter Application
 
-This project is a starting point for a Flutter application.
+The main application built with Flutter, designed for Android, iOS, and Web.
 
-A few resources to get you started if this is your first Flutter project:
+### Prerequisites
 
-- [Lab: Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Cookbook: Useful Flutter samples](https://docs.flutter.dev/cookbook)
+*   [Flutter SDK](https://docs.flutter.dev/get-started/install) installed and configured.
+*   An Android Emulator, iOS Simulator, or a physical device connected.
 
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+### Setup & Installation
 
-## Installation
-
-1.  **Clone the repository:**
-    ```bash
-    git clone <repository-url>
-    ```
-2.  **Navigate to the project directory:**
+1.  **Navigate to the project directory:**
     ```bash
     cd campus_food_ordering_system
     ```
-3.  **Install dependencies:**
+
+2.  **Install dependencies:**
     ```bash
     flutter pub get
     ```
 
-## Running the Prototype (Web)
+### Running the App
 
-1.  **Build the web application:**
+**For Mobile (Android/iOS):**
+1.  Ensure your device or emulator is running (`flutter devices` to check).
+2.  Run the app:
     ```bash
-    flutter build web
+    flutter run
     ```
-2.  **Navigate to the web build directory:**
+
+**For Web:**
+```bash
+flutter run -d chrome
+```
+
+---
+
+## 🎨 Interactive Prototype (HTML/JS)
+
+A rapid prototype built with standard HTML, CSS, and JavaScript to visualize features like Profile, Order Tracking, and Checkout.
+
+### How to Run
+
+1.  **Navigate to the prototype directory:**
     ```bash
-    cd build/web
+    cd prototype
     ```
-3.  **Start a local web server:**
+
+2.  **Start a local server:**
+    You need a local web server to run the prototype correctly. You can use Python's built-in server:
+    
     ```bash
-    python3 -m http.server 8080
+    # For Python 3
+    python3 -m http.server 8090
+    
+    # Or for Python 2
+    python -m SimpleHTTPServer 8090
     ```
-4.  **Open in your browser:**
-    Navigate to `http://localhost:8080` in your web browser.
+
+3.  **Open in Browser:**
+    Go to [http://localhost:8090](http://localhost:8090) in your web browser.
+
+### Key Features in Prototype
+*   **Authentication Flow**: Login and OTP simulation.
+*   **Ordering**: Menu browsing, Cart management, and Checkout.
+*   **Order Tracking**: Real-time status updates with a "Back to Home" navigation.
+*   **Profile**: User profile with logout functionality.
+*   **COD Support**: Cash on Delivery payment option with detailed confirmation.

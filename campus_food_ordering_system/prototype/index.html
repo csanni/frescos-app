@@ -1,0 +1,844 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Fresco's Pizza — Interactive Prototype</title>
+  <meta name="description" content="Interactive prototype of Fresco's Campus Pizza Ordering App">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Round" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+</head>
+
+<body>
+  <div class="phone-frame">
+    <div class="phone-notch"></div>
+    <div id="app">
+
+      <!-- ═══════════════ SPLASH SCREEN ═══════════════ -->
+      <div id="screen-splash" class="screen active">
+        <div class="splash-content">
+          <div class="splash-logo-wrapper">
+            <div class="splash-logo">
+              <span class="material-icons-round splash-icon">local_pizza</span>
+            </div>
+            <h1 class="splash-title">Fresco's<span class="splash-title-accent">Pizza</span></h1>
+            <p class="splash-subtitle">Hot pizza, fast delivery 🍕</p>
+          </div>
+          <div class="splash-loader">
+            <div class="splash-loader-bar"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ═══════════════ LOGIN SCREEN ═══════════════ -->
+      <div id="screen-login" class="screen">
+        <div class="login-hero">
+          <div class="login-hero-bg"></div>
+          <div class="login-illustration">
+            <span class="material-icons-round login-hero-icon">local_pizza</span>
+            <div class="login-hero-circle c1"></div>
+            <div class="login-hero-circle c2"></div>
+            <div class="login-hero-circle c3"></div>
+          </div>
+        </div>
+        <div class="login-form-section">
+          <h2 class="login-heading">Welcome to Fresco's Pizza ! 🍕</h2>
+          <p class="login-subtext">Enter your mobile number to order pizza</p>
+          <div class="phone-input-wrapper">
+            <div class="country-code">+91</div>
+            <input type="tel" id="phone-input" class="phone-input" placeholder="Enter mobile number" maxlength="10">
+          </div>
+          <p id="phone-error" class="input-error" style="display:none;">Please enter a valid 10-digit mobile number</p>
+          <button id="btn-send-otp" class="btn-primary" onclick="navigateTo('screen-otp')">
+            <span class="btn-text">Send OTP</span>
+            <span class="material-icons-round btn-arrow">arrow_forward</span>
+          </button>
+          <p class="terms-text">By continuing, you agree to our <a href="#">Terms & Conditions</a></p>
+        </div>
+      </div>
+
+      <!-- ═══════════════ OTP SCREEN ═══════════════ -->
+      <div id="screen-otp" class="screen">
+        <div class="screen-header">
+          <button class="btn-back" onclick="goBack()">
+            <span class="material-icons-round">arrow_back</span>
+          </button>
+        </div>
+        <div class="otp-content">
+          <div class="otp-icon-wrapper">
+            <span class="material-icons-round otp-lock-icon">verified_user</span>
+          </div>
+          <h2 class="otp-heading">Verify your number</h2>
+          <p class="otp-subtext">OTP sent to <strong>+91-98XXXXX890</strong></p>
+          <div class="otp-inputs">
+            <input type="text" maxlength="1" class="otp-box" value="4">
+            <input type="text" maxlength="1" class="otp-box" value="8">
+            <input type="text" maxlength="1" class="otp-box" value="2">
+            <input type="text" maxlength="1" class="otp-box" value="7">
+            <input type="text" maxlength="1" class="otp-box" value="1">
+            <input type="text" maxlength="1" class="otp-box" value="6">
+          </div>
+          <button class="btn-primary" onclick="navigateTo('screen-home')" style="margin-top:24px;">
+            <span class="btn-text">Verify & Continue</span>
+            <span class="material-icons-round btn-arrow">check</span>
+          </button>
+          <div class="resend-section">
+            <span class="resend-timer">Resend OTP in <strong id="otp-timer">0:28</strong></span>
+          </div>
+        </div>
+      </div>
+
+      <!-- ═══════════════ HOME / MENU SCREEN ═══════════════ -->
+      <div id="screen-home" class="screen">
+        <div class="home-appbar">
+          <div class="greeting-section">
+            <p class="greeting-label">Good Afternoon 🌤️</p>
+            <h2 class="greeting-name">Sanni!</h2>
+          </div>
+          <div class="appbar-actions">
+            <button class="icon-btn" onclick="showSearch()">
+              <span class="material-icons-round">search</span>
+            </button>
+            <button class="icon-btn cart-btn" onclick="navigateTo('screen-cart')">
+              <span class="material-icons-round">shopping_cart</span>
+              <span class="cart-badge" style="display:none;">0</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Category Tabs -->
+        <div class="category-tabs">
+          <button class="cat-tab active" data-cat="all">All</button>
+          <button class="cat-tab" data-cat="pizza">🍕 Pizzas</button>
+          <button class="cat-tab" data-cat="sides">🥖 Sides</button>
+          <button class="cat-tab" data-cat="japanese">🍣 Japanese</button>
+          <button class="cat-tab" data-cat="beverages">☕ Beverages</button>
+          <button class="cat-tab" data-cat="desserts">🍰 Desserts</button>
+          <button class="cat-tab" data-cat="combo">🍱 Combo Meals</button>
+        </div>
+
+        <!-- Menu Items -->
+        <div class="menu-list" id="menu-list">
+          <!-- Items populated by JS -->
+        </div>
+
+        <!-- Bottom Navigation -->
+        <nav class="bottom-nav">
+          <button class="nav-item active" data-tab="menu" onclick="switchTab('menu')">
+            <span class="material-icons-round">restaurant_menu</span>
+            <span class="nav-label">Menu</span>
+          </button>
+          <button class="nav-item" data-tab="orders" onclick="switchTab('orders')">
+            <span class="material-icons-round">receipt_long</span>
+            <span class="nav-label">Orders</span>
+          </button>
+          <button class="nav-item" data-tab="notifications" onclick="switchTab('notifications')">
+            <span class="material-icons-round">notifications</span>
+            <span class="nav-label">Alerts</span>
+            <span class="notif-dot"></span>
+          </button>
+          <button class="nav-item" data-tab="profile" onclick="switchTab('profile')">
+            <span class="material-icons-round">person</span>
+            <span class="nav-label">Profile</span>
+          </button>
+        </nav>
+      </div>
+
+      <!-- ═══════════════ MENU ITEM DETAIL SCREEN ═══════════════ -->
+      <div id="screen-item-detail" class="screen">
+        <div class="detail-hero" id="detail-hero">
+          <button class="btn-back btn-back-overlay" onclick="goBack()">
+            <span class="material-icons-round">arrow_back</span>
+          </button>
+          <div class="detail-hero-img" id="detail-hero-img"></div>
+        </div>
+        <div class="detail-body">
+          <div class="detail-header-row">
+            <div>
+              <h2 class="detail-name" id="detail-name">Paneer Butter Masala</h2>
+              <p class="detail-desc" id="detail-desc">Rich and creamy paneer curry with aromatic spices</p>
+            </div>
+            <div class="veg-badge" id="detail-badge">
+              <span class="veg-dot veg"></span>
+            </div>
+          </div>
+          <div class="detail-price-row">
+            <span class="detail-price" id="detail-price">₹ 180</span>
+            <div class="detail-rating">
+              <span class="material-icons-round star-icon">star</span>
+              <span>4.5</span>
+            </div>
+          </div>
+          <div class="detail-section">
+            <h3 class="detail-section-title">Description</h3>
+            <p class="detail-full-desc" id="detail-full-desc">Soft paneer cubes simmered in a rich, creamy tomato-based
+              gravy with butter, cashews, and a blend of aromatic spices.</p>
+          </div>
+
+          <div class="detail-section" id="pizza-customization" style="display:none;">
+            <h3 class="detail-section-title">Size Options</h3>
+            <div class="radio-group" style="margin-bottom: 16px;">
+              <label class="radio-option">
+                <input type="radio" name="pizza-size" value="small" onchange="updateDetailPrice()">
+                <div class="radio-dot"></div>
+                <div class="radio-content"><span class="radio-title">Small</span><span class="radio-subtitle">Save ₹
+                    50</span></div>
+              </label>
+              <label class="radio-option active">
+                <input type="radio" name="pizza-size" value="medium" onchange="updateDetailPrice()" checked>
+                <div class="radio-dot"></div>
+                <div class="radio-content"><span class="radio-title">Medium</span><span
+                    class="radio-subtitle">Regular</span></div>
+              </label>
+              <label class="radio-option">
+                <input type="radio" name="pizza-size" value="large" onchange="updateDetailPrice()">
+                <div class="radio-dot"></div>
+                <div class="radio-content"><span class="radio-title">Large</span><span class="radio-subtitle">+₹
+                    100</span></div>
+              </label>
+            </div>
+
+            <h3 class="detail-section-title">Add-ons</h3>
+            <div class="addon-group">
+              <label class="radio-option add-on-option">
+                <input type="checkbox" class="pizza-addon-cb" value="extra_veg" data-price="40"
+                  onchange="toggleAddonCb(this)">
+                <div class="checkbox-custom"></div>
+                <div class="radio-content"><span class="radio-title">Extra Vegetables</span><span
+                    class="radio-subtitle">+₹ 40</span></div>
+              </label>
+              <label class="radio-option add-on-option">
+                <input type="checkbox" class="pizza-addon-cb" value="extra_cheese" data-price="50"
+                  onchange="toggleAddonCb(this)">
+                <div class="checkbox-custom"></div>
+                <div class="radio-content"><span class="radio-title">Extra Cheese</span><span class="radio-subtitle">+₹
+                    50</span></div>
+              </label>
+              <label class="radio-option add-on-option">
+                <input type="checkbox" class="pizza-addon-cb" value="extra_chicken" data-price="70"
+                  onchange="toggleAddonCb(this)">
+                <div class="checkbox-custom"></div>
+                <div class="radio-content"><span class="radio-title">Extra Chicken</span><span class="radio-subtitle">+₹
+                    70</span></div>
+              </label>
+            </div>
+          </div>
+          <div class="detail-quantity-row">
+            <span class="qty-label">Quantity</span>
+            <div class="quantity-selector">
+              <button class="qty-btn" onclick="changeQty(-1)">
+                <span class="material-icons-round">remove</span>
+              </button>
+              <span class="qty-value" id="qty-value">1</span>
+              <button class="qty-btn" onclick="changeQty(1)">
+                <span class="material-icons-round">add</span>
+              </button>
+            </div>
+          </div>
+        </div>
+        <div class="detail-footer">
+          <button class="btn-primary btn-add-cart" onclick="addToCartFromDetail()">
+            <span class="material-icons-round">add_shopping_cart</span>
+            <span class="btn-text">Add to Cart — <span id="detail-total">₹ 180</span></span>
+          </button>
+        </div>
+      </div>
+
+      <!-- ═══════════════ CART SCREEN ═══════════════ -->
+      <div id="screen-cart" class="screen">
+        <div class="screen-header">
+          <button class="btn-back" onclick="goBack()">
+            <span class="material-icons-round">arrow_back</span>
+          </button>
+          <h2 class="header-title">Your Cart</h2>
+          <button class="btn-text-action" onclick="clearCart()">Clear All</button>
+        </div>
+        <div class="cart-items" id="cart-items">
+          <!-- Populated by JS -->
+        </div>
+        <div class="cart-summary-section" style="display:none;">
+          <div class="cart-summary-card">
+            <div class="summary-row">
+              <span>Subtotal</span>
+              <span id="cart-subtotal">₹ 0</span>
+            </div>
+            <div class="summary-row">
+              <span>Delivery Charge</span>
+              <span id="cart-delivery-charge" class="free-tag">FREE</span>
+            </div>
+            <p id="free-delivery-hint" class="free-delivery-hint" style="display:none;"></p>
+            <div class="summary-divider"></div>
+            <div class="summary-row total-row">
+              <span>Grand Total</span>
+              <span id="cart-total">₹ 0</span>
+            </div>
+          </div>
+          <button class="btn-primary btn-checkout" onclick="goToCheckout()">
+            <span class="btn-text">Proceed to Checkout — <span id="checkout-total-btn">₹ 0</span></span>
+            <span class="material-icons-round btn-arrow">arrow_forward</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- ═══════════════ CHECKOUT SCREEN ═══════════════ -->
+      <div id="screen-checkout" class="screen">
+        <div class="screen-header">
+          <button class="btn-back" onclick="goBack()">
+            <span class="material-icons-round">arrow_back</span>
+          </button>
+          <h2 class="header-title">Checkout</h2>
+          <div></div>
+        </div>
+        <div class="checkout-body">
+          <!-- Location Section -->
+          <div class="checkout-section">
+            <h3 class="checkout-section-title">
+              <span class="material-icons-round section-icon">location_on</span>
+              Location
+            </h3>
+            <div id="delivery-address-section" class="delivery-address-section">
+              <input type="text" id="delivery-address" class="address-input"
+                placeholder="Enter your hostel name or building name">
+              <input type="hidden" name="delivery" value="delivery" checked>
+            </div>
+          </div>
+
+          <!-- Payment Method -->
+          <div class="checkout-section">
+            <h3 class="checkout-section-title">
+              <span class="material-icons-round section-icon">payment</span>
+              Payment Method
+            </h3>
+            <div class="radio-group">
+              <label class="radio-option active" id="opt-cash">
+                <input type="radio" name="payment" value="cash" checked>
+                <div class="radio-dot"></div>
+                <div class="radio-content">
+                  <span class="radio-title">Cash on Delivery</span>
+                  <span class="radio-subtitle">Pay when you receive your order</span>
+                </div>
+              </label>
+            </div>
+            <!-- COD Notice -->
+            <div id="cod-notice" class="cod-notice">
+              <span class="material-icons-round" style="font-size:18px;color:#FF9800;">info</span>
+              <span>Please keep exact change ready. Our delivery partner may not carry change.</span>
+            </div>
+          </div>
+
+          <!-- Order Summary -->
+          <div class="checkout-section">
+            <h3 class="checkout-section-title">
+              <span class="material-icons-round section-icon">receipt</span>
+              Order Summary
+            </h3>
+            <div class="order-summary-card" id="checkout-summary">
+              <!-- Populated by JS -->
+            </div>
+          </div>
+
+          <!-- Special Instructions -->
+          <div class="checkout-section">
+            <h3 class="checkout-section-title">
+              <span class="material-icons-round section-icon">local_fire_department</span>
+              Cooking instructions
+            </h3>
+            <textarea class="special-instructions" placeholder="E.g., Less spicy, extra sauce..."
+              maxlength="200"></textarea>
+          </div>
+        </div>
+        <div class="checkout-footer">
+          <button class="btn-primary btn-place-order" onclick="showPlaceOrderConfirm()">
+            <span class="btn-text">Place Order — ₹ 0</span>
+            <span class="material-icons-round btn-arrow">check_circle</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- ═══════════════ PAYMENT SCREEN ═══════════════ -->
+      <div id="screen-payment" class="screen">
+        <div class="screen-header">
+          <button class="btn-back" onclick="goBack()">
+            <span class="material-icons-round">arrow_back</span>
+          </button>
+          <h2 class="header-title">Payment</h2>
+          <div></div>
+        </div>
+        <div class="payment-body">
+          <div class="payment-amount-card">
+            <p class="payment-label">Amount to Pay</p>
+            <h1 class="payment-amount">₹ 0</h1>
+            <p class="payment-order-id">Order #PIZ-20260215-0042</p>
+          </div>
+
+          <!-- UPI App Selection -->
+          <div class="payment-upi-apps">
+            <h3 class="upi-title">Pay Using</h3>
+            <div class="upi-grid">
+              <button class="upi-app" onclick="simulatePayment()">
+                <div class="upi-icon gpay">G</div>
+                <span>Google Pay</span>
+              </button>
+              <button class="upi-app" onclick="simulatePayment()">
+                <div class="upi-icon phonepe">P</div>
+                <span>PhonePe</span>
+              </button>
+              <button class="upi-app" onclick="simulatePayment()">
+                <div class="upi-icon paytm">₹</div>
+                <span>Paytm</span>
+              </button>
+              <button class="upi-app" onclick="simulatePayment()">
+                <div class="upi-icon bhim">B</div>
+                <span>BHIM UPI</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- Processing State -->
+          <div class="payment-processing" style="display:none;">
+            <div class="payment-spinner"></div>
+            <p class="payment-status-text">Processing payment...</p>
+            <p class="payment-timer">Please wait</p>
+          </div>
+
+          <!-- Success State -->
+          <div class="payment-success" style="display:none;">
+            <div class="payment-success-icon">
+              <span class="material-icons-round">check_circle</span>
+            </div>
+            <h3 class="payment-success-title">Payment Successful!</h3>
+            <p class="payment-success-text">Redirecting to order tracking...</p>
+          </div>
+
+          <!-- Cash Fallback -->
+          <div class="payment-cash-fallback" style="display:none;">
+            <button class="btn-secondary" onclick="payWithCashInstead()">
+              <span class="material-icons-round">payments</span>
+              <span>Pay with Cash Instead</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- ═══════════════ ORDER TRACKING SCREEN ═══════════════ -->
+      <div id="screen-tracking" class="screen">
+        <div class="screen-header">
+          <button class="btn-back" onclick="goBack()">
+            <span class="material-icons-round">arrow_back</span>
+          </button>
+          <h2 class="header-title">Order Tracking</h2>
+          <div></div>
+        </div>
+        <div class="tracking-body">
+          <div class="tracking-order-info">
+            <div class="tracking-id">
+              <span class="material-icons-round">tag</span>
+              <span>Order #PIZ-20260215-0042</span>
+            </div>
+            <span class="tracking-time">Today, 2:45 PM</span>
+          </div>
+
+          <!-- Payment Method Badge -->
+          <div id="tracking-payment-badge" class="payment-method-badge cod">
+            💵 Cash on Delivery
+          </div>
+
+          <div class="estimated-time-card">
+            <span class="material-icons-round eta-icon">schedule</span>
+            <div>
+              <p class="eta-label">Estimated Ready Time</p>
+              <p class="eta-value">~15 minutes</p>
+            </div>
+          </div>
+
+          <!-- Status Stepper -->
+          <div class="status-stepper">
+            <!-- Populated by JS -->
+          </div>
+
+          <!-- Slide to Accept (shown when order is ready) -->
+          <div id="slide-accept-container" style="display:none;">
+            <!-- Populated by JS -->
+          </div>
+
+          <!-- Order Details -->
+          <div class="tracking-details-card">
+            <div class="tracking-details-header" onclick="toggleTrackingDetails()">
+              <h3>Order Details</h3>
+              <span class="material-icons-round expand-icon" id="tracking-expand">expand_more</span>
+            </div>
+            <div class="tracking-details-body" id="tracking-details-body">
+              <!-- Populated by JS -->
+            </div>
+          </div>
+
+
+
+          <!-- Cancel Order -->
+          <button id="cancel-order-btn" class="btn-cancel-order" onclick="cancelOrder()" style="display:none;">
+            <span class="material-icons-round">cancel</span>
+            <span>Cancel Order</span>
+          </button>
+
+          <button class="btn-secondary contact-btn">
+            <span class="material-icons-round">call</span>
+            <span>Contact Kitchen</span>
+          </button>
+        </div>
+
+        <nav class="bottom-nav">
+          <button class="nav-item" data-tab="menu" onclick="switchTab('menu')">
+            <span class="material-icons-round">restaurant_menu</span>
+            <span class="nav-label">Menu</span>
+          </button>
+          <button class="nav-item active" data-tab="orders" onclick="switchTab('orders')">
+            <span class="material-icons-round">receipt_long</span>
+            <span class="nav-label">Orders</span>
+          </button>
+          <button class="nav-item" data-tab="notifications" onclick="switchTab('notifications')">
+            <span class="material-icons-round">notifications</span>
+            <span class="nav-label">Alerts</span>
+            <span class="notif-dot"></span>
+          </button>
+          <button class="nav-item" data-tab="profile" onclick="switchTab('profile')">
+            <span class="material-icons-round">person</span>
+            <span class="nav-label">Profile</span>
+          </button>
+        </nav>
+      </div>
+
+      <!-- ═══════════════ ORDER HISTORY SCREEN ═══════════════ -->
+      <div id="screen-orders" class="screen">
+        <div class="home-appbar">
+          <h2 class="appbar-title">My Orders</h2>
+          <div class="appbar-actions">
+            <button class="icon-btn cart-btn" onclick="navigateTo('screen-cart')">
+              <span class="material-icons-round">shopping_cart</span>
+              <span class="cart-badge" style="display:none;">0</span>
+            </button>
+          </div>
+        </div>
+        <div class="orders-list" id="orders-list">
+          <!-- Populated by JS -->
+        </div>
+        <nav class="bottom-nav">
+          <button class="nav-item" data-tab="menu" onclick="switchTab('menu')">
+            <span class="material-icons-round">restaurant_menu</span>
+            <span class="nav-label">Menu</span>
+          </button>
+          <button class="nav-item active" data-tab="orders" onclick="switchTab('orders')">
+            <span class="material-icons-round">receipt_long</span>
+            <span class="nav-label">Orders</span>
+          </button>
+          <button class="nav-item" data-tab="notifications" onclick="switchTab('notifications')">
+            <span class="material-icons-round">notifications</span>
+            <span class="nav-label">Alerts</span>
+            <span class="notif-dot"></span>
+          </button>
+          <button class="nav-item" data-tab="profile" onclick="switchTab('profile')">
+            <span class="material-icons-round">person</span>
+            <span class="nav-label">Profile</span>
+          </button>
+        </nav>
+      </div>
+
+      <!-- ═══════════════ NOTIFICATIONS SCREEN ═══════════════ -->
+      <div id="screen-notifications" class="screen">
+        <div class="home-appbar">
+          <h2 class="appbar-title">Notifications</h2>
+          <div class="appbar-actions">
+            <button class="icon-btn">
+              <span class="material-icons-round">done_all</span>
+            </button>
+          </div>
+        </div>
+        <div class="notif-list" id="notif-list">
+          <!-- Populated by JS -->
+        </div>
+        <nav class="bottom-nav">
+          <button class="nav-item" data-tab="menu" onclick="switchTab('menu')">
+            <span class="material-icons-round">restaurant_menu</span>
+            <span class="nav-label">Menu</span>
+          </button>
+          <button class="nav-item" data-tab="orders" onclick="switchTab('orders')">
+            <span class="material-icons-round">receipt_long</span>
+            <span class="nav-label">Orders</span>
+          </button>
+          <button class="nav-item active" data-tab="notifications" onclick="switchTab('notifications')">
+            <span class="material-icons-round">notifications</span>
+            <span class="nav-label">Alerts</span>
+          </button>
+          <button class="nav-item" data-tab="profile" onclick="switchTab('profile')">
+            <span class="material-icons-round">person</span>
+            <span class="nav-label">Profile</span>
+          </button>
+        </nav>
+      </div>
+
+      <!-- ═══════════════ PROFILE SCREEN ═══════════════ -->
+      <div id="screen-profile" class="screen">
+        <div class="home-appbar" style="padding-bottom:0;">
+          <h2 class="appbar-title">Profile</h2>
+          <div></div>
+        </div>
+        <div class="profile-body">
+          <!-- Profile Card -->
+          <div class="profile-card">
+            <div class="profile-avatar">
+              <span id="profile-avatar-text">SA</span>
+            </div>
+            <div class="profile-info">
+              <h3 class="profile-name" id="profile-display-name">Sanni</h3>
+              <p class="profile-phone" id="profile-display-phone">+91 98765 43210</p>
+            </div>
+            <button class="btn-icon-sm" onclick="toggleProfileSection('edit-profile')">
+              <span class="material-icons-round">edit</span>
+            </button>
+          </div>
+
+          <!-- Edit Profile Section (hidden by default) -->
+          <div class="profile-section" id="section-edit-profile" style="display:none;">
+            <div class="profile-section-card">
+              <h4 class="profile-section-heading">Edit Profile</h4>
+              <div class="profile-form-group">
+                <label class="profile-label">Full Name</label>
+                <input type="text" class="profile-input" id="edit-name" value="Sanni" placeholder="Enter your name">
+              </div>
+              <div class="profile-form-group">
+                <label class="profile-label">Email</label>
+                <input type="email" class="profile-input" id="edit-email" value="sanni@example.com"
+                  placeholder="Enter your email">
+              </div>
+              <div class="profile-form-group">
+                <label class="profile-label">Phone</label>
+                <input type="tel" class="profile-input" id="edit-phone" value="+91 98765 43210"
+                  placeholder="Enter phone number">
+              </div>
+              <button class="btn-primary" style="margin-top:12px;" onclick="saveProfile()">
+                <span class="material-icons-round" style="font-size:18px;">check</span>
+                Save Changes
+              </button>
+            </div>
+          </div>
+
+          <!-- Menu Items -->
+          <div class="profile-menu">
+            <button class="profile-menu-item" onclick="toggleProfileSection('edit-profile')">
+              <span class="material-icons-round menu-item-icon">person_outline</span>
+              <span class="menu-item-text">Edit Profile</span>
+              <span class="material-icons-round menu-item-arrow" id="arrow-edit-profile">chevron_right</span>
+            </button>
+            <button class="profile-menu-item" onclick="toggleProfileSection('addresses')">
+              <span class="material-icons-round menu-item-icon">location_on</span>
+              <span class="menu-item-text">My Addresses</span>
+              <span class="material-icons-round menu-item-arrow" id="arrow-addresses">chevron_right</span>
+            </button>
+            <button class="profile-menu-item" onclick="toggleProfileSection('favorites')">
+              <span class="material-icons-round menu-item-icon">favorite_border</span>
+              <span class="menu-item-text">Favorites</span>
+              <span class="material-icons-round menu-item-arrow" id="arrow-favorites">chevron_right</span>
+            </button>
+            <button class="profile-menu-item" onclick="toggleProfileSection('help')">
+              <span class="material-icons-round menu-item-icon">help_outline</span>
+              <span class="menu-item-text">Help & Support</span>
+              <span class="material-icons-round menu-item-arrow" id="arrow-help">chevron_right</span>
+            </button>
+            <button class="profile-menu-item" onclick="toggleProfileSection('about')">
+              <span class="material-icons-round menu-item-icon">info_outline</span>
+              <span class="menu-item-text">About</span>
+              <span class="material-icons-round menu-item-arrow" id="arrow-about">chevron_right</span>
+            </button>
+          </div>
+
+          <!-- My Addresses Section -->
+          <div class="profile-section" id="section-addresses" style="display:none;">
+            <div class="profile-section-card">
+              <h4 class="profile-section-heading">My Addresses</h4>
+              <div class="address-list" id="address-list">
+                <!-- Populated by JS -->
+              </div>
+              <div class="add-address-form" style="margin-top:12px;">
+                <input type="text" class="profile-input" id="new-address-input"
+                  placeholder="Add new address (hostel/building name)">
+                <button class="btn-primary" style="margin-top:8px;" onclick="addAddress()">
+                  <span class="material-icons-round" style="font-size:18px;">add</span>
+                  Add Address
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Favorites Section -->
+          <div class="profile-section" id="section-favorites" style="display:none;">
+            <div class="profile-section-card">
+              <h4 class="profile-section-heading">Favorites</h4>
+              <div id="favorites-list">
+                <!-- Populated by JS -->
+              </div>
+            </div>
+          </div>
+
+          <!-- Help & Support Section -->
+          <div class="profile-section" id="section-help" style="display:none;">
+            <div class="profile-section-card">
+              <h4 class="profile-section-heading">Help & Support</h4>
+              <div class="faq-list">
+                <div class="faq-item" onclick="this.classList.toggle('open')">
+                  <div class="faq-question">
+                    <span>How do I place an order?</span>
+                    <span class="material-icons-round faq-chevron">expand_more</span>
+                  </div>
+                  <div class="faq-answer">Browse the menu, add items to your cart, go to checkout, enter your location,
+                    and place the order. You'll receive a WhatsApp notification when it's ready!</div>
+                </div>
+                <div class="faq-item" onclick="this.classList.toggle('open')">
+                  <div class="faq-question">
+                    <span>How do I pick up my order?</span>
+                    <span class="material-icons-round faq-chevron">expand_more</span>
+                  </div>
+                  <div class="faq-answer">When your order is ready, visit Fresco's Pizza store. Pay cash at the counter
+                    and slide the "Accept Delivery" button on your phone to confirm collection.</div>
+                </div>
+                <div class="faq-item" onclick="this.classList.toggle('open')">
+                  <div class="faq-question">
+                    <span>Can I cancel my order?</span>
+                    <span class="material-icons-round faq-chevron">expand_more</span>
+                  </div>
+                  <div class="faq-answer">Yes, you can cancel your order before it reaches "Ready for Pickup" status. Go
+                    to Orders → Track → Cancel Order.</div>
+                </div>
+                <div class="faq-item" onclick="this.classList.toggle('open')">
+                  <div class="faq-question">
+                    <span>What payment methods are available?</span>
+                    <span class="material-icons-round faq-chevron">expand_more</span>
+                  </div>
+                  <div class="faq-answer">Currently we accept Cash on Delivery only. Please keep exact change ready when
+                    picking up your order.</div>
+                </div>
+              </div>
+              <div
+                style="margin-top:16px;padding:12px;background:rgba(255,107,53,0.06);border-radius:var(--radius-sm);">
+                <p style="font-size:13px;font-weight:600;color:var(--text-primary);margin-bottom:4px;">Need more help?
+                </p>
+                <p style="font-size:12px;color:var(--text-secondary);">Call us: +91 98765 43210</p>
+                <p style="font-size:12px;color:var(--text-secondary);">Email: help@frescos.pizza</p>
+              </div>
+            </div>
+          </div>
+
+          <!-- About Section -->
+          <div class="profile-section" id="section-about" style="display:none;">
+            <div class="profile-section-card">
+              <h4 class="profile-section-heading">About Fresco's Pizza</h4>
+              <div style="text-align:center;padding:12px 0;">
+                <div
+                  style="width:64px;height:64px;background:linear-gradient(135deg,var(--primary),var(--primary-dark));border-radius:18px;display:flex;align-items:center;justify-content:center;margin:0 auto 12px;">
+                  <span class="material-icons-round" style="font-size:32px;color:white;">local_pizza</span>
+                </div>
+                <h3 style="font-size:18px;font-weight:700;color:var(--text-primary);">Fresco's Pizza</h3>
+                <p style="font-size:12px;color:var(--text-hint);margin-top:4px;">Version 1.0.0 (Prototype)</p>
+              </div>
+              <div class="about-info-list">
+                <div class="about-info-row">
+                  <span class="material-icons-round" style="font-size:18px;color:var(--primary);">restaurant</span>
+                  <span>Campus food ordering made easy</span>
+                </div>
+                <div class="about-info-row">
+                  <span class="material-icons-round" style="font-size:18px;color:var(--primary);">schedule</span>
+                  <span>Delivery in 25-30 minutes</span>
+                </div>
+                <div class="about-info-row">
+                  <span class="material-icons-round" style="font-size:18px;color:var(--primary);">store</span>
+                  <span>Store pickup with cash payment</span>
+                </div>
+                <div class="about-info-row">
+                  <span class="material-icons-round" style="font-size:18px;color:var(--primary);">favorite</span>
+                  <span>Made with ❤️ for campus students</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Logout Button -->
+          <button class="btn-logout" onclick="logout()">
+            <span class="material-icons-round">logout</span>
+            <span>Logout</span>
+          </button>
+
+          <p class="app-version">App Version 1.0.0 (Prototype)</p>
+        </div>
+        <nav class="bottom-nav">
+          <button class="nav-item" data-tab="menu" onclick="switchTab('menu')">
+            <span class="material-icons-round">restaurant_menu</span>
+            <span class="nav-label">Menu</span>
+          </button>
+          <button class="nav-item" data-tab="orders" onclick="switchTab('orders')">
+            <span class="material-icons-round">receipt_long</span>
+            <span class="nav-label">Orders</span>
+          </button>
+          <button class="nav-item" data-tab="notifications" onclick="switchTab('notifications')">
+            <span class="material-icons-round">notifications</span>
+            <span class="nav-label">Alerts</span>
+            <span class="notif-dot"></span>
+          </button>
+          <button class="nav-item active" data-tab="profile" onclick="switchTab('profile')">
+            <span class="material-icons-round">person</span>
+            <span class="nav-label">Profile</span>
+          </button>
+        </nav>
+      </div>
+
+
+
+      <!-- ═══════════════ CONFIRMATION MODAL ═══════════════ -->
+      <div id="modal-confirm" class="modal-overlay" style="display:none;">
+        <div class="modal-card">
+          <div class="modal-icon-wrapper">
+            <span class="material-icons-round modal-icon">shopping_bag</span>
+          </div>
+          <h3 class="modal-title">Confirm your order?</h3>
+          <div class="modal-summary">
+            <div class="modal-summary-row">
+              <span id="modal-items-count">0 items</span>
+              <span id="modal-total">₹ 0</span>
+            </div>
+            <div class="modal-summary-row">
+              <span>Delivery</span>
+              <span id="modal-delivery-type">Delivery</span>
+            </div>
+            <div class="modal-summary-row">
+              <span>Payment</span>
+              <span id="modal-payment-type">Cash on Delivery</span>
+            </div>
+          </div>
+          <div class="modal-actions">
+            <button class="btn-modal-cancel" onclick="hideModal()">Cancel</button>
+            <button class="btn-modal-confirm" onclick="confirmOrder()">Confirm Order</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- ═══════════════ SUCCESS TOAST ═══════════════ -->
+      <div id="toast-success" class="toast" style="display:none;">
+        <span class="material-icons-round toast-icon">check_circle</span>
+        <span class="toast-text">Item added to cart!</span>
+      </div>
+
+    </div><!-- end #app -->
+  </div><!-- end .phone-frame -->
+
+  <div class="prototype-label">
+    <span class="proto-dot"></span>
+    Fresco's Pizza — Interactive Prototype
+  </div>
+
+
+
+  <script src="app.js"></script>
+</body>
+
+</html>
