@@ -294,16 +294,41 @@
           <div></div>
         </div>
         <div class="checkout-body">
+          <!-- Order Type Selection -->
+          <div class="checkout-section">
+            <h3 class="checkout-section-title">
+              <span class="material-icons-round section-icon">restaurant</span>
+              Order Type
+            </h3>
+            <div class="radio-group order-type-group">
+              <label class="radio-option active order-type-card" id="opt-pickup">
+                <input type="radio" name="order-type" value="pickup" checked onchange="onOrderTypeChange()">
+                <div class="radio-dot"></div>
+                <div class="radio-content">
+                  <span class="radio-title">🛍️ Self Pickup</span>
+                  <span class="radio-subtitle">Come to store, pick up & go</span>
+                </div>
+              </label>
+              <label class="radio-option order-type-card" id="opt-dinein">
+                <input type="radio" name="order-type" value="dinein" onchange="onOrderTypeChange()">
+                <div class="radio-dot"></div>
+                <div class="radio-content">
+                  <span class="radio-title">🍽️ Dine-in</span>
+                  <span class="radio-subtitle">Eat at the store</span>
+                </div>
+              </label>
+            </div>
+          </div>
+
           <!-- Location Section -->
           <div class="checkout-section">
             <h3 class="checkout-section-title">
               <span class="material-icons-round section-icon">location_on</span>
-              Location
+              <span id="location-title">Pickup Location Details</span>
             </h3>
             <div id="delivery-address-section" class="delivery-address-section">
               <input type="text" id="delivery-address" class="address-input"
                 placeholder="Enter your hostel name or building name">
-              <input type="hidden" name="delivery" value="delivery" checked>
             </div>
           </div>
 
@@ -318,15 +343,15 @@
                 <input type="radio" name="payment" value="cash" checked>
                 <div class="radio-dot"></div>
                 <div class="radio-content">
-                  <span class="radio-title">Cash on Delivery</span>
-                  <span class="radio-subtitle">Pay when you receive your order</span>
+                  <span class="radio-title">Cash at Store</span>
+                  <span class="radio-subtitle">Pay cash when you visit the store</span>
                 </div>
               </label>
             </div>
             <!-- COD Notice -->
             <div id="cod-notice" class="cod-notice">
               <span class="material-icons-round" style="font-size:18px;color:#FF9800;">info</span>
-              <span>Please keep exact change ready. Our delivery partner may not carry change.</span>
+              <span>Please keep exact change ready for cash payment at the store.</span>
             </div>
           </div>
 
@@ -443,8 +468,11 @@
           </div>
 
           <!-- Payment Method Badge -->
+          <div id="tracking-order-type-badge" class="order-type-badge pickup">
+            🛍️ Self Pickup
+          </div>
           <div id="tracking-payment-badge" class="payment-method-badge cod">
-            💵 Cash on Delivery
+            💵 Cash at Store
           </div>
 
           <div class="estimated-time-card">
@@ -701,7 +729,7 @@
                     <span class="material-icons-round faq-chevron">expand_more</span>
                   </div>
                   <div class="faq-answer">When your order is ready, visit Fresco's Pizza store. Pay cash at the counter
-                    and slide the "Accept Delivery" button on your phone to confirm collection.</div>
+                    and slide the accept button on your phone to confirm. Choose "Self Pickup" to take away or "Dine-in" to eat at the store.</div>
                 </div>
                 <div class="faq-item" onclick="this.classList.toggle('open')">
                   <div class="faq-question">

@@ -76,11 +76,12 @@ function getGrandTotal() {
 }
 
 function getSelectedDeliveryType() {
-    return 'delivery'; // delivery only mode
+    var selected = document.querySelector('input[name="order-type"]:checked');
+    return selected ? selected.value : 'pickup'; // 'pickup' or 'dinein'
 }
 
 function getSelectedPaymentMethod() {
-    return 'cash'; // cash on delivery only
+    return 'cash'; // cash only at the store
 }
 
 // ═══════════════ INIT ═══════════════
@@ -509,8 +510,28 @@ function updateCheckoutTotals() {
     if (modalTotal) modalTotal.textContent = '\u20B9 ' + total;
 }
 
+function onOrderTypeChange() {
+    var orderType = getSelectedOrderType();
+    var pickupOpt = document.getElementById('opt-pickup');
+    var dineinOpt = document.getElementById('opt-dinein');
+    if (pickupOpt) pickupOpt.classList.toggle('active', orderType === 'pickup');
+    if (dineinOpt) dineinOpt.classList.toggle('active', orderType === 'dinein');
+
+    // Update location label
+    var locTitle = document.getElementById('location-title');
+    if (locTitle) {
+        locTitle.textContent = orderType === 'dinein' ? 'Your Location Details' : 'Pickup Location Details';
+    }
+}
+
+function getSelectedOrderType() {
+    var selected = document.querySelector('input[name="order-type"]:checked');
+    return selected ? selected.value : 'pickup';
+}
+
 function showPlaceOrderConfirm() {
     var total = getGrandTotal();
+    var orderType = getSelectedOrderType();
 
     var modalItems = document.getElementById('modal-items-count');
     var modalTotal = document.getElementById('modal-total');
@@ -519,8 +540,8 @@ function showPlaceOrderConfirm() {
 
     if (modalItems) modalItems.textContent = getCartCount() + ' items';
     if (modalTotal) modalTotal.textContent = '\u20B9 ' + total;
-    if (modalDelivery) modalDelivery.textContent = 'Delivery';
-    if (modalPayment) modalPayment.textContent = 'Cash on Delivery';
+    if (modalDelivery) modalDelivery.textContent = orderType === 'dinein' ? 'Dine-in' : 'Self Pickup';
+    if (modalPayment) modalPayment.textContent = 'Cash at Store';
 
     document.getElementById('modal-confirm').style.display = 'flex';
 }
@@ -547,6 +568,8 @@ function placeOrder(paymentMethod) {
     var instrInput = document.querySelector('.special-instructions');
     if (instrInput) instructions = instrInput.value;
 
+    var orderType = getSelectedOrderType();
+
     var newOrder = {
         id: orderId,
         date: 'Today, ' + formatTime(now),
@@ -562,7 +585,7 @@ function placeOrder(paymentMethod) {
             { status: 'placed', time: formatTime(now), label: 'Order Placed' }
         ],
         paymentMethod: 'cash',
-        deliveryType: 'delivery',
+        deliveryType: orderType,
         address: address,
         instructions: instructions,
         isPaid: false,
@@ -619,11 +642,12 @@ function renderTrackingScreen(order) {
     // Estimated time - 25-30 minutes
     var etaValue = document.querySelector('.eta-value');
     if (etaValue) {
+        var isDineInEta = order.deliveryType === 'dinein';
         var statusTimes = {
             placed: '~25-30 minutes',
             confirmed: '~20-25 minutes',
-            ready: 'Ready for pickup!',
-            delivered: 'Completed',
+            ready: isDineInEta ? 'Ready for dine-in!' : 'Ready for pickup!',
+            delivered: isDineInEta ? 'Dine-in Confirmed' : 'Collected',
             cancelled: 'Cancelled'
         };
         etaValue.textContent = statusTimes[order.status] || '~25-30 minutes';
@@ -632,8 +656,20 @@ function renderTrackingScreen(order) {
     // Payment badge
     var paymentBadge = document.getElementById('tracking-payment-badge');
     if (paymentBadge) {
-        paymentBadge.textContent = '\uD83D\uDCB5 Cash on Delivery';
+        paymentBadge.textContent = '\uD83D\uDCB5 Cash at Store';
         paymentBadge.className = 'payment-method-badge cod';
+    }
+
+    // Order type badge
+    var orderTypeBadge = document.getElementById('tracking-order-type-badge');
+    if (orderTypeBadge) {
+        if (order.deliveryType === 'dinein') {
+            orderTypeBadge.textContent = '\uD83C\uDF7D\uFE0F Dine-in';
+            orderTypeBadge.className = 'order-type-badge dinein';
+        } else {
+            orderTypeBadge.textContent = '\uD83D\uDECD\uFE0F Self Pickup';
+            orderTypeBadge.className = 'order-type-badge pickup';
+        }
     }
 
     // Status stepper
@@ -665,9 +701,15 @@ function renderSlideToAccept(order) {
 
     if (order.status === 'ready') {
         container.style.display = 'block';
+        var isDineIn = order.deliveryType === 'dinein';
+        var slideLabel = isDineIn
+            ? '\uD83C\uDF7D\uFE0F Your order is ready!<br>Visit the store, pay cash & enjoy your meal.'
+            : '\uD83C\uDF55 Your order is ready!<br>Visit the store, pay cash & collect.';
+        var slideText = isDineIn ? 'Slide to Confirm Dine-in \u279C' : 'Slide to Collect \u279C';
+        var slideDoneText = isDineIn ? '\u2714 Dine-in Confirmed!' : '\u2714 Collected!';
         container.innerHTML =
             '<div class="slide-accept-wrapper">' +
-            '<p class="slide-accept-label">\uD83C\uDF55 Your order is ready!<br>Visit the store, pay cash & collect.</p>' +
+            '<p class="slide-accept-label">' + slideLabel + '</p>' +
             '<div class="slide-track" id="slide-track">' +
             '<div class="slide-thumb" id="slide-thumb">' +
             '<span class="material-icons-round slide-arrow-icon">double_arrow</span>' +
@@ -678,8 +720,8 @@ function renderSlideToAccept(order) {
             '<span class="material-icons-round">chevron_right</span>' +
             '<span class="material-icons-round">chevron_right</span>' +
             '</div>' +
-            '<span class="slide-text">Slide to Collect \u279C</span>' +
-            '<span class="slide-text-done" style="display:none;">\u2714 Collected!</span>' +
+            '<span class="slide-text">' + slideText + '</span>' +
+            '<span class="slide-text-done" style="display:none;">' + slideDoneText + '</span>' +
             '</div>' +
             '<p class="slide-hint-text">\u261E Drag the green circle to the right</p>' +
             '</div>';
@@ -758,17 +800,20 @@ function slideToAcceptDelivery(orderId) {
     var order = orders.find(function (o) { return o.id === orderId; });
     if (!order || order.status !== 'ready') return;
 
+    var isDineIn = order.deliveryType === 'dinein';
     order.status = 'delivered';
     order.isPaid = true;
     order.statusHistory.push({
         status: 'delivered',
         time: formatTime(new Date()),
-        label: 'Order Collected'
+        label: isDineIn ? 'Dine-in Confirmed' : 'Order Collected'
     });
 
     notifications.unshift({
-        title: 'Order Collected! \uD83C\uDF89',
-        text: 'Your order #' + orderId + ' has been picked up. Enjoy!',
+        title: isDineIn ? 'Dine-in Confirmed! \uD83C\uDF89' : 'Order Collected! \uD83C\uDF89',
+        text: isDineIn
+            ? 'Your order #' + orderId + ' is confirmed for dine-in. Enjoy!'
+            : 'Your order #' + orderId + ' has been picked up. Enjoy!',
         time: formatTime(new Date()),
         type: 'order',
         unread: true
@@ -789,12 +834,13 @@ function renderStatusStepper(order) {
     var stepper = document.querySelector('.status-stepper');
     if (!stepper) return;
 
-    // Flow: Placed > Confirmed > Ready for Pickup > Completed (no 'Out for Delivery')
+    var isDineIn = order.deliveryType === 'dinein';
+    // Flow: Placed > Confirmed > Ready for Pickup/Dine-in > Completed
     var allStatuses = [
         { key: 'placed', label: 'Order Placed', icon: 'receipt_long' },
         { key: 'confirmed', label: 'Confirmed', icon: 'check_circle' },
-        { key: 'ready', label: 'Ready for Pickup', icon: 'takeout_dining' },
-        { key: 'delivered', label: 'Collected', icon: 'done_all' }
+        { key: 'ready', label: isDineIn ? 'Ready for Dine-in' : 'Ready for Pickup', icon: isDineIn ? 'restaurant' : 'takeout_dining' },
+        { key: 'delivered', label: isDineIn ? 'Dine-in Confirmed' : 'Collected', icon: 'done_all' }
     ];
 
     var currentIdx = allStatuses.findIndex(function (s) { return s.key === order.status; });
@@ -843,10 +889,11 @@ function startOrderProgression(orderId) {
     }
     trackingTimers[orderId] = [];
 
-    // Auto-progression stops at 'ready' - customer must slide to accept
+    var order = orders.find(function (o) { return o.id === orderId; });
+    var isDineIn = order && order.deliveryType === 'dinein';
     var statusProgression = [
         { status: 'confirmed', label: 'Order Confirmed', delay: 5000 },
-        { status: 'ready', label: 'Ready for Pickup', delay: 15000 }
+        { status: 'ready', label: isDineIn ? 'Ready for Dine-in' : 'Ready for Pickup', delay: 15000 }
     ];
 
     statusProgression.forEach(function (step) {
@@ -936,17 +983,19 @@ function autoSendWhatsApp(orderId) {
         return '  \u2022 ' + item.qty + 'x ' + item.name + ' \u2014 \u20B9 ' + (item.price * item.qty);
     }).join('\n');
 
+    var orderTypeLabel = order.deliveryType === 'dinein' ? 'Dine-in' : 'Self Pickup';
     var msg = '\uD83C\uDF55 *Fresco\'s Pizza \u2014 Order Confirmation*\n\n' +
         '\uD83D\uDCCB *Order:* #' + order.id + '\n' +
         '\uD83D\uDCC5 *Date:* ' + order.date + '\n' +
-        '\uD83D\uDCCC *Status:* ' + (statusLabels[order.status] || order.status) + '\n\n' +
+        '\uD83D\uDCCC *Status:* ' + (statusLabels[order.status] || order.status) + '\n' +
+        '\uD83C\uDF7D *Type:* ' + orderTypeLabel + '\n\n' +
         '\uD83D\uDED2 *Items:*\n' + itemsText + '\n\n' +
         '\uD83D\uDCB0 Subtotal: \u20B9 ' + order.subtotal + '\n' +
         '\uD83D\uDE9A Delivery: ' + (order.deliveryCharge > 0 ? '\u20B9 ' + order.deliveryCharge : 'FREE') + '\n' +
         '\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\n' +
         '\uD83D\uDCB5 *Total: \u20B9 ' + order.total + '*\n\n' +
-        '\uD83D\uDE9A Delivery' + (order.address ? ' to ' + order.address : '') + '\n' +
-        '\uD83D\uDCB5 Cash on Delivery\n\n' +
+        '\uD83C\uDF7D ' + orderTypeLabel + (order.address ? ' \u2014 ' + order.address : '') + '\n' +
+        '\uD83D\uDCB5 Cash at Store\n\n' +
         'Track your order in the Fresco\'s Pizza app! \uD83C\uDF55';
 
     var phone = getRegisteredPhone();
@@ -1012,10 +1061,16 @@ function buildOrderCard(o, isActive) {
         placed: '#2196F3', confirmed: '#FF9800', ready: '#4CAF50',
         delivered: '#4CAF50', cancelled: '#E53935'
     };
+    var isDineIn = o.deliveryType === 'dinein';
     var statusLabels = {
-        placed: 'Placed', confirmed: 'Confirmed', ready: 'Ready',
-        delivered: 'Collected', cancelled: 'Cancelled'
+        placed: 'Placed', confirmed: 'Confirmed',
+        ready: isDineIn ? 'Ready for Dine-in' : 'Ready for Pickup',
+        delivered: isDineIn ? 'Dine-in Done' : 'Collected',
+        cancelled: 'Cancelled'
     };
+    var orderTypeBadge = isDineIn
+        ? '<span class="order-type-tag dinein">\uD83C\uDF7D\uFE0F Dine-in</span>'
+        : '<span class="order-type-tag pickup">\uD83D\uDECD\uFE0F Pickup</span>';
 
     return '<div class="order-card' + (isActive ? ' order-active' : '') + '" onclick="showOrderTracking(\'' + o.id + '\')">' +
         '<div class="order-card-header">' +
@@ -1029,7 +1084,8 @@ function buildOrderCard(o, isActive) {
         '</div>' +
         '<div class="order-card-items">' + o.items + '</div>' +
         '<div class="order-card-footer">' +
-        '<span class="order-payment-tag">\uD83D\uDCB5 COD</span>' +
+        orderTypeBadge +
+        '<span class="order-payment-tag">\uD83D\uDCB5 Cash</span>' +
         (isActive ? '<button class="btn-track" onclick="event.stopPropagation();showOrderTracking(\'' + o.id + '\')"><span class="material-icons-round" style="font-size:16px;">location_on</span> Track</button>' : '') +
         (!isActive && o.status === 'delivered' ? '<button class="btn-reorder" onclick="event.stopPropagation();reorder(\'' + o.id + '\')">Reorder</button>' : '') +
         '</div></div>';

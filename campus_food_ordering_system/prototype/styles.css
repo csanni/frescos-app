@@ -765,6 +765,7 @@ body {
     margin-top: 2px;
     display: -webkit-box;
     -webkit-line-clamp: 2;
+    line-clamp: 2;
     -webkit-box-orient: vertical;
     overflow: hidden;
 }
@@ -3217,4 +3218,85 @@ body {
     border-color: var(--primary);
     color: white;
     box-shadow: 0 2px 8px rgba(255, 107, 53, 0.3);
+}
+
+/* ═══════════════ ORDER TYPE SELECTION ═══════════════ */
+.order-type-group {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+}
+
+.order-type-card {
+    border: 2px solid var(--divider);
+    border-radius: var(--radius-md);
+    padding: 14px 12px;
+    text-align: center;
+    transition: all 0.25s ease;
+    cursor: pointer;
+}
+
+.order-type-card.active {
+    border-color: var(--primary);
+    background: rgba(255, 107, 53, 0.06);
+    box-shadow: 0 2px 8px rgba(255, 107, 53, 0.15);
+}
+
+.order-type-card .radio-title {
+    font-size: 14px;
+    font-weight: 700;
+}
+
+.order-type-card .radio-subtitle {
+    font-size: 11px;
+    color: var(--text-hint);
+}
+
+.order-type-card .radio-content {
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+}
+
+/* ═══════════════ ORDER TYPE BADGE (TRACKING) ═══════════════ */
+.order-type-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 16px;
+    border-radius: var(--radius-full);
+    font-size: 13px;
+    font-weight: 600;
+    margin: 8px 0 0;
+}
+
+.order-type-badge.pickup {
+    background: rgba(46, 196, 182, 0.12);
+    color: #2EC4B6;
+}
+
+.order-type-badge.dinein {
+    background: rgba(255, 107, 53, 0.12);
+    color: var(--primary);
+}
+
+/* ═══════════════ ORDER TYPE TAG (ORDER CARDS) ═══════════════ */
+.order-type-tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    padding: 3px 8px;
+    border-radius: var(--radius-full);
+    font-size: 11px;
+    font-weight: 600;
+}
+
+.order-type-tag.pickup {
+    background: rgba(46, 196, 182, 0.1);
+    color: #2EC4B6;
+}
+
+.order-type-tag.dinein {
+    background: rgba(255, 107, 53, 0.1);
+    color: var(--primary);
 }

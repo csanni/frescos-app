@@ -38,9 +38,9 @@ The Fresco's Kitchen Customer Mobile App is a **cross-platform Flutter applicati
 | **Primary Color** | `#FF6B35` (Fresco's Orange) |
 | **State Management** | Provider (ChangeNotifier) |
 | **Prototype** | `prototype/index.html` — 1,316 lines of working JS |
-| **Delivery Model** | Delivery only (no dine-in) |
-| **Delivery Time** | 25–30 minutes |
-| **Payment** | Cash on Delivery (payment gateway planned) |
+| **Delivery Model** | Self Pickup + Dine-in (both available) |
+| **Preparation Time** | 25–30 minutes |
+| **Payment** | Cash at Store only (payment gateway planned) |
 
 ### Prototype Data Inventory
 
@@ -126,6 +126,81 @@ graph LR
     ORDERS --> TRACKING
 ```
 
+### 3.1.1 Order Fulfillment User Flow
+
+```mermaid
+graph TD
+    A["Browse Menu"] --> B["Select Item"]
+    B --> C["Choose Size / Toppings"]
+    C --> D["Add to Cart"]
+    D --> E{"More items?"}
+    E -->|Yes| A
+    E -->|No| F["View Cart"]
+    F --> G["Proceed to Checkout"]
+    G --> H["Select Order Type"]
+    H --> I["🛍️ Self Pickup"]
+    H --> J["🍽️ Dine-in"]
+    I --> K["Enter Location Details"]
+    J --> K
+    K --> L["Review Order Summary"]
+    L --> M["Confirm & Place Order"]
+    M --> N["Order Tracking Screen"]
+    N --> O{"Order Ready?"}
+    O -->|No| P["Wait for status updates"]
+    P --> O
+    O -->|Yes, Pickup| Q["Slide to Collect ➜"]
+    O -->|Yes, Dine-in| R["Slide to Confirm Dine-in ➜"]
+    Q --> S["Visit Store → Pay Cash → Collect"]
+    R --> T["Visit Store → Pay Cash → Dine-in"]
+    S --> U["✅ Order Completed"]
+    T --> U
+```
+
+### 3.1.2 Order Status State Machine
+
+```mermaid
+stateDiagram-v2
+    [*] --> Placed : Customer places order
+    Placed --> Confirmed : Kitchen accepts (~2 min)
+    Confirmed --> Ready : Food prepared (~15 min)
+    Ready --> Collected : Customer slides to accept (Pickup)
+    Ready --> DineInConfirmed : Customer slides to accept (Dine-in)
+    Collected --> [*]
+    DineInConfirmed --> [*]
+    Placed --> Cancelled : Customer cancels
+    Confirmed --> Cancelled : Customer cancels
+    Cancelled --> [*]
+
+    note right of Ready
+        Status label adapts:
+        Pickup → "Ready for Pickup"
+        Dine-in → "Ready for Dine-in"
+    end note
+```
+
+### 3.1.3 Slide-to-Accept Button States
+
+```mermaid
+stateDiagram-v2
+    [*] --> Hidden : Order status ≠ ready
+    Hidden --> Idle : Order status = ready
+    Idle --> Dragging : User starts dragging thumb
+    Dragging --> Released : User releases before threshold
+    Released --> Idle : Thumb snaps back to start
+    Dragging --> Completed : Thumb passes 85% threshold
+    Completed --> [*] : Order marked as collected/confirmed
+
+    note right of Idle
+        Pickup: "Slide to Collect ➜"
+        Dine-in: "Slide to Confirm Dine-in ➜"
+    end note
+    note right of Completed
+        Pickup: "✔ Collected!"
+        Dine-in: "✔ Dine-in Confirmed!"
+        Background turns green, confetti
+    end note
+```
+
 ### 3.2 Bottom Navigation
 
 | Tab | Icon | Screen | Provider |
@@ -145,9 +220,9 @@ graph LR
 | 4 | Home / Menu | `home_screen.dart` | Category tabs (flex-wrap grid, 7 tabs), search, menu item cards, veg/non-veg badge | ✅ Exists |
 | 5 | Item Detail | `menu_item_detail_screen.dart` | Image, description, size picker (S/M/L), toppings checkboxes, crust options, qty stepper, cooking instructions, dynamic price | ✅ Exists |
 | 6 | Cart | `cart_screen.dart` | Item list with qty adjustment, subtotal, delivery charge (₹30 if < ₹500), promo code input, grand total | ✅ Exists |
-| 7 | Checkout | `checkout_screen.dart` | Delivery only, location text field (hostel/building), cooking instructions tab, order summary | ✅ Exists |
-| 8 | Payment | `payment_screen.dart` | Cash on Delivery (selected), UPI placeholder | ✅ Exists |
-| 9 | Order Tracking | `order_tracking_screen.dart` | Status stepper (Placed → Confirmed → Ready → Collected), 25-30 min ETA, slide-to-accept button | ✅ Exists |
+| 7 | Checkout | `checkout_screen.dart` | Order type selection (Pickup/Dine-in), location text field, cooking instructions, order summary | ✅ Exists |
+| 8 | Payment | `payment_screen.dart` | Cash at Store (selected), UPI placeholder | ✅ Exists |
+| 9 | Order Tracking | `order_tracking_screen.dart` | Status stepper with order-type-aware labels, order type badge, 25-30 min ETA, slide-to-accept | ✅ Exists |
 | 10 | Order History | `order_history_screen.dart` | Past orders list, status badges, reorder button | ✅ Exists |
 | 11 | Profile | `profile_screen.dart` | Edit name/phone, saved addresses, favorites, help/FAQ, about section | ✅ Exists |
 | 12 | Admin (Mobile) | `admin_screen.dart` | Dashboard + Orders tabs (3-tab view) | ✅ Exists |
@@ -292,8 +367,8 @@ class CartItem {
 enum OrderStatus {
   placed, confirmed, preparing, ready, outForDelivery, delivered, cancelled
 }
-enum PaymentMethod { upi, cashOnDelivery }
-enum DeliveryType { selfPickup, delivery }
+enum PaymentMethod { upi, cashAtStore }
+enum OrderType { selfPickup, dineIn }
 
 class Order {
   final String id;                     // 'ORD-A1B2C3D4' or 'PIZ-20260301-0100'
@@ -304,7 +379,7 @@ class Order {
   final double total;
   final OrderStatus status;            // 7-state lifecycle
   final PaymentMethod paymentMethod;
-  final DeliveryType deliveryType;     // Currently: delivery only
+  final OrderType orderType;           // Self Pickup or Dine-in
   final String? deliveryAddress;       // Hostel name / building
   final String? specialInstructions;   // Cooking instructions
   final DateTime createdAt;
@@ -450,17 +525,29 @@ class NotificationProvider extends ChangeNotifier {
 |--------|---------|-------|
 | Placed | "Order Placed" | — |
 | Confirmed | "Order Confirmed" | ~2 min after placement |
-| Ready | "Ready for Pickup" | ~15-17 min after confirmed |
-| Delivered/Collected | "Collected" via slide-to-accept | Customer action |
+| Ready | "Ready for Pickup" or "Ready for Dine-in" (based on order type) | ~15-17 min after confirmed |
+| Delivered/Collected | "Collected" or "Dine-in Confirmed" via slide-to-accept | Customer action |
 
 - **ETA**: 25–30 minutes displayed on tracking screen
-- **Slide to Accept**: Customer drags slider to confirm physical pickup
+- **Slide to Accept**: Customer drags slider — text adapts: "Slide to Collect" (pickup) or "Slide to Confirm Dine-in" (dine-in)
 
-### 7.5 WhatsApp Notification
+### 7.5 Order Types
 
-Auto-triggered on order placement. Uses `url_launcher` to open WhatsApp with pre-formatted message containing order ID, items, total, and ETA.
+| Type | Label | Description | Tracking Status |
+|------|-------|-------------|----------------|
+| **Self Pickup** | 🛍️ Self Pickup | Customer comes to store, picks up food, and leaves | "Ready for Pickup" → "Collected" |
+| **Dine-in** | 🍽️ Dine-in | Customer comes to store and eats at the store | "Ready for Dine-in" → "Dine-in Confirmed" |
 
-### 7.6 Profile Features
+- Both types require **cash payment at the store**
+- Customer selects order type during checkout (radio card UI)
+- WhatsApp notification includes order type
+- Order type badge shown on tracking screen
+
+### 7.6 WhatsApp Notification
+
+Auto-triggered on order placement. Uses `url_launcher` to open WhatsApp with pre-formatted message containing order ID, items, total, order type, and ETA.
+
+### 7.7 Profile Features
 
 - Edit name, phone number
 - Saved delivery addresses (hostel/building names)
@@ -526,9 +613,9 @@ class ApiConfig {
     "toppings": ["extra-cheese", "mushrooms"],
     "special_instructions": "Extra crispy"
   }],
-  "delivery_type": "delivery",
+  "order_type": "pickup",
   "delivery_address": "Hostel A, Room 204",
-  "payment_method": "cash_on_delivery",
+  "payment_method": "cash_at_store",
   "promo_code": "PIZZABOGO"
 }
 ```
@@ -648,6 +735,7 @@ erDiagram
         varchar order_number UK
         uuid customer_id FK
         enum status
+        enum order_type "pickup|dinein"
         enum payment_method
         varchar delivery_address
         decimal subtotal
