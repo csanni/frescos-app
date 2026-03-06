@@ -3227,6 +3227,11 @@ body {
     gap: 10px;
 }
 
+.order-type-group.three-col {
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 8px;
+}
+
 .order-type-card {
     border: 2px solid var(--divider);
     border-radius: var(--radius-md);
@@ -3258,6 +3263,12 @@ body {
     gap: 2px;
 }
 
+.order-type-icon {
+    font-size: 24px;
+    line-height: 1;
+    margin-bottom: 2px;
+}
+
 /* ═══════════════ ORDER TYPE BADGE (TRACKING) ═══════════════ */
 .order-type-badge {
     display: inline-flex;
@@ -3280,6 +3291,11 @@ body {
     color: var(--primary);
 }
 
+.order-type-badge.delivery {
+    background: rgba(33, 150, 243, 0.12);
+    color: #2196F3;
+}
+
 /* ═══════════════ ORDER TYPE TAG (ORDER CARDS) ═══════════════ */
 .order-type-tag {
     display: inline-flex;
@@ -3299,4 +3315,266 @@ body {
 .order-type-tag.dinein {
     background: rgba(255, 107, 53, 0.1);
     color: var(--primary);
+}
+
+.order-type-tag.delivery {
+    background: rgba(33, 150, 243, 0.1);
+    color: #2196F3;
+}
+
+/* ═══════════════ OUTLET SELECTOR ═══════════════ */
+.outlet-selector {
+    margin-top: 4px;
+}
+
+.outlet-label {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    margin-bottom: 6px;
+}
+
+.outlet-dropdown {
+    width: 100%;
+    padding: 8px 12px;
+    border: 1px solid var(--divider);
+    border-radius: var(--radius-sm);
+    font-family: 'Inter', sans-serif;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text-primary);
+    background: white;
+    cursor: pointer;
+    appearance: auto;
+}
+
+.outlet-dropdown:focus {
+    outline: none;
+    border-color: var(--primary);
+    box-shadow: 0 0 0 3px rgba(255, 107, 53, 0.1);
+}
+
+/* ═══════════════ GST ROWS ═══════════════ */
+.checkout-item-row.gst-row {
+    color: var(--text-hint);
+    font-size: 12px;
+    padding: 1px 0;
+}
+
+/* ═══════════════ INVOICE BUTTON ═══════════════ */
+.invoice-btn {
+    margin-top: 12px;
+    width: 100%;
+    justify-content: center;
+    border: 1px dashed var(--primary);
+    color: var(--primary);
+    font-weight: 600;
+    border-radius: var(--radius-sm);
+    background: rgba(255, 107, 53, 0.04);
+    transition: all 0.2s;
+}
+
+.invoice-btn:hover {
+    background: rgba(255, 107, 53, 0.1);
+}
+
+/* ═══════════════ QR SCANNER MODAL ═══════════════ */
+.qr-modal-card {
+    max-width: 340px;
+    width: 90%;
+    padding: 0;
+    overflow: hidden;
+    border-radius: 20px;
+}
+
+.qr-scanner-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px 20px;
+    background: linear-gradient(135deg, #1A1D23, #2D3748);
+    color: white;
+}
+
+.qr-scanner-header h3 {
+    font-size: 16px;
+    font-weight: 700;
+}
+
+.qr-close-btn {
+    background: rgba(255, 255, 255, 0.15);
+    border: none;
+    border-radius: 50%;
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    color: white;
+}
+
+.qr-scanner-body {
+    padding: 24px 20px;
+    text-align: center;
+    background: #F4F6F9;
+}
+
+.qr-viewfinder {
+    width: 180px;
+    height: 180px;
+    margin: 0 auto 16px;
+    position: relative;
+    background: rgba(0, 0, 0, 0.03);
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.qr-corner {
+    position: absolute;
+    width: 28px;
+    height: 28px;
+    border-color: var(--primary);
+    border-style: solid;
+    border-width: 0;
+}
+
+.qr-corner.tl {
+    top: 0;
+    left: 0;
+    border-top-width: 3px;
+    border-left-width: 3px;
+    border-radius: 8px 0 0 0;
+}
+
+.qr-corner.tr {
+    top: 0;
+    right: 0;
+    border-top-width: 3px;
+    border-right-width: 3px;
+    border-radius: 0 8px 0 0;
+}
+
+.qr-corner.bl {
+    bottom: 0;
+    left: 0;
+    border-bottom-width: 3px;
+    border-left-width: 3px;
+    border-radius: 0 0 0 8px;
+}
+
+.qr-corner.br {
+    bottom: 0;
+    right: 0;
+    border-bottom-width: 3px;
+    border-right-width: 3px;
+    border-radius: 0 0 8px 0;
+}
+
+.qr-scan-line {
+    position: absolute;
+    top: 10%;
+    left: 10%;
+    right: 10%;
+    height: 2px;
+    background: linear-gradient(90deg, transparent, var(--primary), transparent);
+    animation: qrScan 2s infinite ease-in-out;
+}
+
+@keyframes qrScan {
+
+    0%,
+    100% {
+        top: 10%;
+    }
+
+    50% {
+        top: 85%;
+    }
+}
+
+.qr-cam-icon {
+    font-size: 48px;
+    color: rgba(0, 0, 0, 0.12);
+}
+
+.qr-instruction {
+    font-size: 13px;
+    color: var(--text-secondary);
+    margin-bottom: 16px;
+}
+
+.qr-simulate-btn {
+    font-size: 13px;
+    padding: 10px 24px;
+    border-radius: var(--radius-sm);
+}
+
+.qr-result {
+    padding: 32px 20px;
+    text-align: center;
+    background: white;
+}
+
+.qr-success-icon .material-icons-round {
+    font-size: 56px;
+    color: var(--success);
+}
+
+.qr-result h4 {
+    font-size: 18px;
+    font-weight: 700;
+    margin: 8px 0 4px;
+    color: var(--text-primary);
+}
+
+.qr-table-info {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--primary);
+    margin-bottom: 4px;
+}
+
+.qr-table-sub {
+    font-size: 12px;
+    color: var(--text-hint);
+    margin-bottom: 20px;
+}
+
+.qr-result .btn-primary {
+    width: 100%;
+}
+
+/* ═══════════════ PAYMENT METHOD GROUP ═══════════════ */
+.payment-method-group .radio-option {
+    margin-bottom: 8px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.payment-method-group .radio-option:last-child {
+    margin-bottom: 0;
+}
+
+#opt-razorpay.active {
+    border-color: #2196F3;
+    background: rgba(33, 150, 243, 0.04);
+}
+
+#opt-razorpay .radio-title {
+    color: #1565C0;
+    font-weight: 700;
+}
+
+#opt-razorpay.active .radio-dot {
+    border-color: #2196F3;
+}
+
+#opt-razorpay.active .radio-dot::after {
+    background: #2196F3;
 }

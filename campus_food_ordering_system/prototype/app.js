@@ -72,7 +72,9 @@ function getDeliveryCharge() {
 }
 
 function getGrandTotal() {
-    return getCartTotal() + getDeliveryCharge();
+    var sub = getCartTotal();
+    var gst = Math.round(sub * 0.0125) * 2; // CGST 1.25% + SGST 1.25%
+    return sub + getDeliveryCharge() + gst;
 }
 
 function getSelectedDeliveryType() {
@@ -489,13 +491,17 @@ function renderCheckoutSummary() {
     if (!el) return;
     var subtotal = getCartTotal();
     var deliveryCharge = getDeliveryCharge();
-    var total = subtotal + deliveryCharge;
+    var cgst = Math.round(subtotal * 0.0125);
+    var sgst = Math.round(subtotal * 0.0125);
+    var total = subtotal + deliveryCharge + cgst + sgst;
 
     el.innerHTML = cartItems.map(function (i) {
         return '<div class="checkout-item-row"><span>' + i.name + ' x' + i.qty + '</span><span>\u20B9 ' + (i.price * i.qty) + '</span></div>';
     }).join('') +
         '<div class="checkout-item-row" style="color:var(--text-secondary);font-size:13px;"><span>Delivery Charge</span><span class="' + (deliveryCharge === 0 ? 'free-tag' : '') + '">' + (deliveryCharge > 0 ? '\u20B9 ' + deliveryCharge : 'FREE') + '</span></div>' +
-        '<div class="checkout-item-row" style="font-weight:700;color:var(--text-primary);border-top:1px solid var(--divider);padding-top:8px;margin-top:4px;"><span>Total</span><span>\u20B9 ' + total + '</span></div>';
+        '<div class="checkout-item-row gst-row"><span>CGST (1.25%)</span><span>\u20B9 ' + cgst + '</span></div>' +
+        '<div class="checkout-item-row gst-row"><span>SGST (1.25%)</span><span>\u20B9 ' + sgst + '</span></div>' +
+        '<div class="checkout-item-row" style="font-weight:700;color:var(--text-primary);border-top:1px solid var(--divider);padding-top:8px;margin-top:4px;"><span>Total (incl. GST)</span><span>\u20B9 ' + total + '</span></div>';
 }
 
 function updateCheckoutTotals() {
@@ -514,19 +520,52 @@ function onOrderTypeChange() {
     var orderType = getSelectedOrderType();
     var pickupOpt = document.getElementById('opt-pickup');
     var dineinOpt = document.getElementById('opt-dinein');
+    var deliveryOpt = document.getElementById('opt-delivery');
     if (pickupOpt) pickupOpt.classList.toggle('active', orderType === 'pickup');
     if (dineinOpt) dineinOpt.classList.toggle('active', orderType === 'dinein');
+    if (deliveryOpt) deliveryOpt.classList.toggle('active', orderType === 'delivery');
 
-    // Update location label
-    var locTitle = document.getElementById('location-title');
-    if (locTitle) {
-        locTitle.textContent = orderType === 'dinein' ? 'Your Location Details' : 'Pickup Location Details';
+    // Show/hide location section — only needed for Delivery
+    var locationSection = document.getElementById('location-section');
+    if (locationSection) {
+        locationSection.style.display = orderType === 'delivery' ? 'block' : 'none';
     }
+
+    // Update payment label based on order type
+    var payTitle = document.getElementById('payment-title');
+    var paySub = document.getElementById('payment-subtitle');
+    var codText = document.getElementById('cod-notice-text');
+    if (orderType === 'delivery') {
+        if (payTitle) payTitle.textContent = 'UPI to Delivery Agent';
+        if (paySub) paySub.textContent = 'Pay via UPI to the delivery partner on arrival';
+        if (codText) codText.textContent = 'Keep your UPI app ready. The delivery agent will share a QR code or UPI ID.';
+    } else {
+        if (payTitle) payTitle.textContent = 'Cash at Store';
+        if (paySub) paySub.textContent = 'Pay cash when you visit the store';
+        if (codText) codText.textContent = 'Please keep exact change ready for cash payment at the store.';
+    }
+
+    // Reset payment to first option and update active states
+    var cashRadio = document.querySelector('input[name="payment"][value="cash"]');
+    if (cashRadio) { cashRadio.checked = true; }
+    onPaymentMethodChange();
 }
 
 function getSelectedOrderType() {
     var selected = document.querySelector('input[name="order-type"]:checked');
-    return selected ? selected.value : 'pickup';
+    return selected ? selected.value : 'pickup'; // 'pickup', 'dinein', or 'delivery'
+}
+
+function getOrderTypeLabel(type) {
+    if (type === 'dinein') return 'Dine-in';
+    if (type === 'delivery') return 'Delivery';
+    return 'Self Pickup';
+}
+
+function getOrderTypeEmoji(type) {
+    if (type === 'dinein') return '\uD83C\uDF7D\uFE0F';
+    if (type === 'delivery') return '\uD83D\uDE9A';
+    return '\uD83D\uDECD\uFE0F';
 }
 
 function showPlaceOrderConfirm() {
@@ -540,8 +579,8 @@ function showPlaceOrderConfirm() {
 
     if (modalItems) modalItems.textContent = getCartCount() + ' items';
     if (modalTotal) modalTotal.textContent = '\u20B9 ' + total;
-    if (modalDelivery) modalDelivery.textContent = orderType === 'dinein' ? 'Dine-in' : 'Self Pickup';
-    if (modalPayment) modalPayment.textContent = 'Cash at Store';
+    if (modalDelivery) modalDelivery.textContent = getOrderTypeLabel(orderType);
+    if (modalPayment) modalPayment.textContent = orderType === 'delivery' ? 'UPI to Delivery Agent' : 'Cash at Store';
 
     document.getElementById('modal-confirm').style.display = 'flex';
 }
@@ -642,12 +681,14 @@ function renderTrackingScreen(order) {
     // Estimated time - 25-30 minutes
     var etaValue = document.querySelector('.eta-value');
     if (etaValue) {
-        var isDineInEta = order.deliveryType === 'dinein';
+        var ot = order.deliveryType;
+        var readyText = ot === 'dinein' ? 'Ready for dine-in!' : (ot === 'delivery' ? 'Out for delivery!' : 'Ready for pickup!');
+        var doneText = ot === 'dinein' ? 'Dine-in Confirmed' : (ot === 'delivery' ? 'Delivered' : 'Collected');
         var statusTimes = {
-            placed: '~25-30 minutes',
-            confirmed: '~20-25 minutes',
-            ready: isDineInEta ? 'Ready for dine-in!' : 'Ready for pickup!',
-            delivered: isDineInEta ? 'Dine-in Confirmed' : 'Collected',
+            placed: ot === 'delivery' ? '~30-40 minutes' : '~25-30 minutes',
+            confirmed: ot === 'delivery' ? '~25-35 minutes' : '~20-25 minutes',
+            ready: readyText,
+            delivered: doneText,
             cancelled: 'Cancelled'
         };
         etaValue.textContent = statusTimes[order.status] || '~25-30 minutes';
@@ -656,20 +697,15 @@ function renderTrackingScreen(order) {
     // Payment badge
     var paymentBadge = document.getElementById('tracking-payment-badge');
     if (paymentBadge) {
-        paymentBadge.textContent = '\uD83D\uDCB5 Cash at Store';
+        paymentBadge.textContent = order.deliveryType === 'delivery' ? '\uD83D\uDCF1 UPI to Agent' : '\uD83D\uDCB5 Cash at Store';
         paymentBadge.className = 'payment-method-badge cod';
     }
 
     // Order type badge
     var orderTypeBadge = document.getElementById('tracking-order-type-badge');
     if (orderTypeBadge) {
-        if (order.deliveryType === 'dinein') {
-            orderTypeBadge.textContent = '\uD83C\uDF7D\uFE0F Dine-in';
-            orderTypeBadge.className = 'order-type-badge dinein';
-        } else {
-            orderTypeBadge.textContent = '\uD83D\uDECD\uFE0F Self Pickup';
-            orderTypeBadge.className = 'order-type-badge pickup';
-        }
+        orderTypeBadge.textContent = getOrderTypeEmoji(order.deliveryType) + ' ' + getOrderTypeLabel(order.deliveryType);
+        orderTypeBadge.className = 'order-type-badge ' + order.deliveryType;
     }
 
     // Status stepper
@@ -701,12 +737,21 @@ function renderSlideToAccept(order) {
 
     if (order.status === 'ready') {
         container.style.display = 'block';
-        var isDineIn = order.deliveryType === 'dinein';
-        var slideLabel = isDineIn
-            ? '\uD83C\uDF7D\uFE0F Your order is ready!<br>Visit the store, pay cash & enjoy your meal.'
-            : '\uD83C\uDF55 Your order is ready!<br>Visit the store, pay cash & collect.';
-        var slideText = isDineIn ? 'Slide to Confirm Dine-in \u279C' : 'Slide to Collect \u279C';
-        var slideDoneText = isDineIn ? '\u2714 Dine-in Confirmed!' : '\u2714 Collected!';
+        var ot = order.deliveryType;
+        var slideLabel, slideText, slideDoneText;
+        if (ot === 'dinein') {
+            slideLabel = '\uD83C\uDF7D\uFE0F Your order is ready!<br>Visit the store, pay cash & enjoy your meal.';
+            slideText = 'Slide to Confirm Dine-in \u279C';
+            slideDoneText = '\u2714 Dine-in Confirmed!';
+        } else if (ot === 'delivery') {
+            slideLabel = '\uD83D\uDE9A Your order is on the way!<br>Pay via UPI to the delivery agent.';
+            slideText = 'Slide to Accept Delivery \u279C';
+            slideDoneText = '\u2714 Delivered!';
+        } else {
+            slideLabel = '\uD83C\uDF55 Your order is ready!<br>Visit the store, pay cash & collect.';
+            slideText = 'Slide to Collect \u279C';
+            slideDoneText = '\u2714 Collected!';
+        }
         container.innerHTML =
             '<div class="slide-accept-wrapper">' +
             '<p class="slide-accept-label">' + slideLabel + '</p>' +
@@ -800,20 +845,25 @@ function slideToAcceptDelivery(orderId) {
     var order = orders.find(function (o) { return o.id === orderId; });
     if (!order || order.status !== 'ready') return;
 
-    var isDineIn = order.deliveryType === 'dinein';
+    var ot = order.deliveryType;
+    var doneLabel = ot === 'dinein' ? 'Dine-in Confirmed' : (ot === 'delivery' ? 'Delivered' : 'Order Collected');
     order.status = 'delivered';
     order.isPaid = true;
     order.statusHistory.push({
         status: 'delivered',
         time: formatTime(new Date()),
-        label: isDineIn ? 'Dine-in Confirmed' : 'Order Collected'
+        label: doneLabel
     });
 
+    var notifTitle = doneLabel + '! \uD83C\uDF89';
+    var notifText = ot === 'dinein'
+        ? 'Your order #' + orderId + ' is confirmed for dine-in. Enjoy!'
+        : (ot === 'delivery'
+            ? 'Your order #' + orderId + ' has been delivered. Enjoy!'
+            : 'Your order #' + orderId + ' has been picked up. Enjoy!');
     notifications.unshift({
-        title: isDineIn ? 'Dine-in Confirmed! \uD83C\uDF89' : 'Order Collected! \uD83C\uDF89',
-        text: isDineIn
-            ? 'Your order #' + orderId + ' is confirmed for dine-in. Enjoy!'
-            : 'Your order #' + orderId + ' has been picked up. Enjoy!',
+        title: notifTitle,
+        text: notifText,
         time: formatTime(new Date()),
         type: 'order',
         unread: true
@@ -834,13 +884,16 @@ function renderStatusStepper(order) {
     var stepper = document.querySelector('.status-stepper');
     if (!stepper) return;
 
-    var isDineIn = order.deliveryType === 'dinein';
-    // Flow: Placed > Confirmed > Ready for Pickup/Dine-in > Completed
+    var ot = order.deliveryType;
+    var readyLabel = ot === 'dinein' ? 'Ready for Dine-in' : (ot === 'delivery' ? 'Out for Delivery' : 'Ready for Pickup');
+    var readyIcon = ot === 'dinein' ? 'restaurant' : (ot === 'delivery' ? 'local_shipping' : 'takeout_dining');
+    var doneLabel = ot === 'dinein' ? 'Dine-in Confirmed' : (ot === 'delivery' ? 'Delivered' : 'Collected');
+    // Flow: Placed > Confirmed > Ready/Out for Delivery > Completed
     var allStatuses = [
         { key: 'placed', label: 'Order Placed', icon: 'receipt_long' },
         { key: 'confirmed', label: 'Confirmed', icon: 'check_circle' },
-        { key: 'ready', label: isDineIn ? 'Ready for Dine-in' : 'Ready for Pickup', icon: isDineIn ? 'restaurant' : 'takeout_dining' },
-        { key: 'delivered', label: isDineIn ? 'Dine-in Confirmed' : 'Collected', icon: 'done_all' }
+        { key: 'ready', label: readyLabel, icon: readyIcon },
+        { key: 'delivered', label: doneLabel, icon: 'done_all' }
     ];
 
     var currentIdx = allStatuses.findIndex(function (s) { return s.key === order.status; });
@@ -890,10 +943,11 @@ function startOrderProgression(orderId) {
     trackingTimers[orderId] = [];
 
     var order = orders.find(function (o) { return o.id === orderId; });
-    var isDineIn = order && order.deliveryType === 'dinein';
+    var ot = order ? order.deliveryType : 'pickup';
+    var readyLabel = ot === 'dinein' ? 'Ready for Dine-in' : (ot === 'delivery' ? 'Out for Delivery' : 'Ready for Pickup');
     var statusProgression = [
         { status: 'confirmed', label: 'Order Confirmed', delay: 5000 },
-        { status: 'ready', label: isDineIn ? 'Ready for Dine-in' : 'Ready for Pickup', delay: 15000 }
+        { status: 'ready', label: readyLabel, delay: ot === 'delivery' ? 20000 : 15000 }
     ];
 
     statusProgression.forEach(function (step) {
@@ -983,7 +1037,8 @@ function autoSendWhatsApp(orderId) {
         return '  \u2022 ' + item.qty + 'x ' + item.name + ' \u2014 \u20B9 ' + (item.price * item.qty);
     }).join('\n');
 
-    var orderTypeLabel = order.deliveryType === 'dinein' ? 'Dine-in' : 'Self Pickup';
+    var orderTypeLabel = getOrderTypeLabel(order.deliveryType);
+    var paymentLabel = order.deliveryType === 'delivery' ? 'UPI to Delivery Agent' : 'Cash at Store';
     var msg = '\uD83C\uDF55 *Fresco\'s Pizza \u2014 Order Confirmation*\n\n' +
         '\uD83D\uDCCB *Order:* #' + order.id + '\n' +
         '\uD83D\uDCC5 *Date:* ' + order.date + '\n' +
@@ -995,7 +1050,7 @@ function autoSendWhatsApp(orderId) {
         '\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\n' +
         '\uD83D\uDCB5 *Total: \u20B9 ' + order.total + '*\n\n' +
         '\uD83C\uDF7D ' + orderTypeLabel + (order.address ? ' \u2014 ' + order.address : '') + '\n' +
-        '\uD83D\uDCB5 Cash at Store\n\n' +
+        '\uD83D\uDCB5 ' + paymentLabel + '\n\n' +
         'Track your order in the Fresco\'s Pizza app! \uD83C\uDF55';
 
     var phone = getRegisteredPhone();
@@ -1061,16 +1116,14 @@ function buildOrderCard(o, isActive) {
         placed: '#2196F3', confirmed: '#FF9800', ready: '#4CAF50',
         delivered: '#4CAF50', cancelled: '#E53935'
     };
-    var isDineIn = o.deliveryType === 'dinein';
+    var ot = o.deliveryType;
     var statusLabels = {
         placed: 'Placed', confirmed: 'Confirmed',
-        ready: isDineIn ? 'Ready for Dine-in' : 'Ready for Pickup',
-        delivered: isDineIn ? 'Dine-in Done' : 'Collected',
+        ready: ot === 'dinein' ? 'Ready for Dine-in' : (ot === 'delivery' ? 'Out for Delivery' : 'Ready for Pickup'),
+        delivered: ot === 'dinein' ? 'Dine-in Done' : (ot === 'delivery' ? 'Delivered' : 'Collected'),
         cancelled: 'Cancelled'
     };
-    var orderTypeBadge = isDineIn
-        ? '<span class="order-type-tag dinein">\uD83C\uDF7D\uFE0F Dine-in</span>'
-        : '<span class="order-type-tag pickup">\uD83D\uDECD\uFE0F Pickup</span>';
+    var orderTypeBadge = '<span class="order-type-tag ' + ot + '">' + getOrderTypeEmoji(ot) + ' ' + getOrderTypeLabel(ot) + '</span>';
 
     return '<div class="order-card' + (isActive ? ' order-active' : '') + '" onclick="showOrderTracking(\'' + o.id + '\')">' +
         '<div class="order-card-header">' +
@@ -1368,4 +1421,180 @@ function removeFavorite(id) {
     favoriteItems = favoriteItems.filter(function (fid) { return fid !== id; });
     renderFavorites();
     showToast('Removed from favorites');
+}
+
+// ═══════════════ QR-BASED ORDERING ═══════════════
+var qrTableNumber = null;
+var qrOutlet = null;
+
+function openQRScanner() {
+    var modal = document.getElementById('modal-qr');
+    var body = modal.querySelector('.qr-scanner-body');
+    var result = document.getElementById('qr-result');
+    body.style.display = 'block';
+    result.style.display = 'none';
+    modal.style.display = 'flex';
+}
+
+function closeQRScanner() {
+    document.getElementById('modal-qr').style.display = 'none';
+}
+
+function simulateQRScan() {
+    var tables = [3, 5, 7, 9, 12, 15];
+    var outlets = ['Main Campus', 'North Block', 'Central Food Court'];
+    var tbl = tables[Math.floor(Math.random() * tables.length)];
+    var outlet = outlets[Math.floor(Math.random() * outlets.length)];
+
+    qrTableNumber = tbl;
+    qrOutlet = outlet;
+
+    var body = document.querySelector('.qr-scanner-body');
+    var result = document.getElementById('qr-result');
+    result.querySelector('.qr-table-info').textContent = '\uD83D\uDCCD Table #' + tbl + ' \u2014 ' + outlet;
+    body.style.display = 'none';
+    result.style.display = 'block';
+}
+
+function applyQRTable() {
+    closeQRScanner();
+    showToast('Table #' + qrTableNumber + ' linked! Dine-in mode set.');
+    // Auto-switch to dine-in
+    var dineinRadio = document.querySelector('input[name="order-type"][value="dinein"]');
+    if (dineinRadio) {
+        dineinRadio.checked = true;
+        onOrderTypeChange();
+    }
+}
+
+// ═══════════════ MULTI-OUTLET ═══════════════
+function onOutletChange() {
+    var sel = document.getElementById('outlet-select');
+    if (sel) {
+        var outletName = sel.options[sel.selectedIndex].text;
+        showToast('Outlet: ' + outletName.replace('\uD83D\uDCCD ', ''));
+    }
+}
+
+// ═══════════════ PAYMENT METHOD SELECTION ═══════════════
+function onPaymentMethodChange() {
+    var radios = document.querySelectorAll('input[name="payment"]');
+    radios.forEach(function (r) {
+        var label = r.closest('.radio-option');
+        if (label) label.classList.toggle('active', r.checked);
+    });
+}
+
+// ═══════════════ RAZORPAY SIMULATION ═══════════════
+var _origShowPlaceOrderConfirm = typeof showPlaceOrderConfirm === 'function' ? showPlaceOrderConfirm : null;
+
+// Override placeOrder flow to support Razorpay
+(function () {
+    var origConfirmOrder = window.confirmOrder;
+    window.confirmOrder = function () {
+        var payMethod = 'cash';
+        var radios = document.querySelectorAll('input[name="payment"]');
+        radios.forEach(function (r) { if (r.checked) payMethod = r.value; });
+
+        if (payMethod === 'razorpay') {
+            hideModal();
+            simulateRazorpay();
+        } else {
+            origConfirmOrder();
+        }
+    };
+})();
+
+function simulateRazorpay() {
+    // Show UPI payment screen with simulated Razorpay branding
+    navigateTo('screen-payment');
+    var amountEl = document.querySelector('.payment-amount');
+    var orderIdEl = document.querySelector('.payment-order-id');
+    if (amountEl) amountEl.textContent = '\u20B9 ' + getGrandTotal();
+    if (orderIdEl) orderIdEl.textContent = 'Razorpay | Order #' + generateOrderId().replace('PIZ-', 'RZP-');
+
+    // Show UPI apps section
+    var upiSection = document.querySelector('.payment-upi-apps');
+    var processing = document.querySelector('.payment-processing');
+    var success = document.querySelector('.payment-success');
+    if (upiSection) upiSection.style.display = 'block';
+    if (processing) processing.style.display = 'none';
+    if (success) success.style.display = 'none';
+}
+
+// ═══════════════ GST-COMPLIANT INVOICE ═══════════════
+function downloadInvoice() {
+    if (!activeOrderId) { showToast('No active order'); return; }
+    var order = orders.find(function (o) { return o.id === activeOrderId; });
+    if (!order) { showToast('Order not found'); return; }
+
+    var sub = order.subtotal || 0;
+    var cgst = Math.round(sub * 0.0125);
+    var sgst = Math.round(sub * 0.0125);
+    var dc = order.deliveryCharge || 0;
+    var total = sub + dc + cgst + sgst;
+
+    var outletSel = document.getElementById('outlet-select');
+    var outletName = outletSel ? outletSel.options[outletSel.selectedIndex].text.replace('\uD83D\uDCCD ', '') : "Fresco's \u2014 Main Campus";
+    var tableInfo = qrTableNumber ? ' | Table #' + qrTableNumber : '';
+
+    var ot = order.deliveryType || 'pickup';
+    var otLabel = ot === 'dinein' ? 'Dine-in' : ot === 'delivery' ? 'Delivery' : 'Self Pickup';
+    var payLabel = ot === 'delivery' ? 'UPI to Delivery Agent' : 'Cash at Store';
+    var pmRadios = document.querySelectorAll('input[name="payment"]');
+    pmRadios.forEach(function (r) { if (r.checked && r.value === 'razorpay') payLabel = 'Razorpay (Online)'; });
+
+    var itemRows = (order.itemsList || []).map(function (item) {
+        var lineTotal = item.price * item.qty;
+        return '<tr><td>' + item.name + '</td><td style="text-align:center">' + item.qty + '</td><td style="text-align:right">\u20B9 ' + item.price + '</td><td style="text-align:right">\u20B9 ' + lineTotal + '</td></tr>';
+    }).join('');
+
+    var invoiceHtml = '<!DOCTYPE html><html><head><title>Invoice - ' + order.id + '</title>' +
+        '<style>body{font-family:Inter,Arial,sans-serif;max-width:420px;margin:20px auto;padding:20px;color:#1A1D23;}' +
+        '.inv-header{text-align:center;border-bottom:2px solid #FF6B35;padding-bottom:12px;margin-bottom:16px;}' +
+        '.inv-header h2{color:#FF6B35;margin:0 0 4px;}' +
+        '.inv-header p{margin:2px 0;font-size:12px;color:#6B7280;}' +
+        '.inv-section{margin-bottom:12px;}' +
+        '.inv-section h4{font-size:13px;color:#6B7280;margin:0 0 6px;text-transform:uppercase;letter-spacing:0.5px;}' +
+        '.inv-row{display:flex;justify-content:space-between;font-size:13px;padding:3px 0;}' +
+        '.inv-row.total{font-weight:700;font-size:15px;border-top:2px solid #1A1D23;padding-top:8px;margin-top:8px;}' +
+        '.inv-row.gst{color:#6B7280;font-size:12px;}' +
+        'table{width:100%;border-collapse:collapse;font-size:13px;margin:8px 0;}' +
+        'th{background:#F4F6F9;padding:6px 8px;text-align:left;font-size:12px;color:#6B7280;}' +
+        'td{padding:6px 8px;border-bottom:1px solid #E5E7EB;}' +
+        '.inv-footer{text-align:center;margin-top:20px;padding-top:12px;border-top:1px dashed #E5E7EB;font-size:11px;color:#9CA3AF;}' +
+        '.gstin{font-weight:600;color:#1A1D23;font-size:12px;}' +
+        '@media print{body{margin:0;} .no-print{display:none!important;}}' +
+        '</style></head><body>' +
+        '<div class="inv-header"><h2>\uD83C\uDF55 Fresco\'s Kitchen</h2>' +
+        '<p>' + outletName + tableInfo + '</p>' +
+        '<p class="gstin">GSTIN: 29AABCF1234C1Z5</p>' +
+        '<p>Tax Invoice</p></div>' +
+        '<div class="inv-section"><h4>Invoice Details</h4>' +
+        '<div class="inv-row"><span>Invoice #</span><span>' + order.id + '</span></div>' +
+        '<div class="inv-row"><span>Date</span><span>' + order.date + '</span></div>' +
+        '<div class="inv-row"><span>Order Type</span><span>' + otLabel + '</span></div>' +
+        '<div class="inv-row"><span>Payment</span><span>' + payLabel + '</span></div></div>' +
+        '<div class="inv-section"><h4>Items</h4>' +
+        '<table><thead><tr><th>Item</th><th style="text-align:center">Qty</th><th style="text-align:right">Rate</th><th style="text-align:right">Amount</th></tr></thead>' +
+        '<tbody>' + itemRows + '</tbody></table></div>' +
+        '<div class="inv-section"><h4>Bill Summary</h4>' +
+        '<div class="inv-row"><span>Subtotal</span><span>\u20B9 ' + sub + '</span></div>' +
+        '<div class="inv-row" style="font-size:12px;color:#6B7280;"><span>Delivery Charge</span><span>' + (dc > 0 ? '\u20B9 ' + dc : 'FREE') + '</span></div>' +
+        '<div class="inv-row gst"><span>CGST @ 1.25%</span><span>\u20B9 ' + cgst + '</span></div>' +
+        '<div class="inv-row gst"><span>SGST @ 1.25%</span><span>\u20B9 ' + sgst + '</span></div>' +
+        '<div class="inv-row total"><span>Grand Total</span><span>\u20B9 ' + total + '</span></div></div>' +
+        '<div class="inv-footer"><p>Thank you for ordering with Fresco\'s Kitchen!</p>' +
+        '<p>This is a computer-generated invoice.</p>' +
+        '<button class="no-print" onclick="window.print()" style="margin-top:12px;padding:8px 24px;background:#FF6B35;color:white;border:none;border-radius:8px;cursor:pointer;font-weight:600;">Print Invoice</button></div>' +
+        '</body></html>';
+
+    var win = window.open('', '_blank', 'width=500,height=700');
+    if (win) {
+        win.document.write(invoiceHtml);
+        win.document.close();
+        showToast('GST Invoice generated!');
+    } else {
+        showToast('Please allow pop-ups for invoice');
+    }
 }
