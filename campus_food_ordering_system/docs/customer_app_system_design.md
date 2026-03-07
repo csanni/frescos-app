@@ -1,31 +1,29 @@
-# Fresco's Kitchen — Customer Mobile App System Design
+# Fresco's Kitchen — Customer Mobile App
 
-**Version:** 2.0 · **Date:** 1 March 2026 · **Author:** Engineering Team  
-**Companion Document:** [Admin Portal System Design](./admin_portal_system_design.md)
+**Version:** 3.0 · **Date:** 6 March 2026 · **Author:** Engineering Team  
+**Companion Documents:** [Admin Portal](./admin_portal_system_design.md) · [Backend API](./backend_api_system_design.md) · [Database Schema](./database_schema.md)
 
 ---
 
 ## Table of Contents
 
 1. [Overview](#1-overview)
-2. [Architecture](#2-architecture)
-3. [Screen Flow & Navigation](#3-screen-flow--navigation)
-4. [Existing Codebase](#4-existing-codebase)
-5. [Data Models](#5-data-models)
-6. [State Management](#6-state-management)
-7. [Feature Specifications](#7-feature-specifications)
-8. [Backend API Integration](#8-backend-api-integration)
-9. [Database Schema (Customer-Facing)](#9-database-schema)
-10. [Real-Time & Notifications](#10-real-time--notifications)
-11. [Security](#11-security)
-12. [Performance & Deployment](#12-performance--deployment)
-13. [Implementation Roadmap](#13-implementation-roadmap)
+2. [Development Approach](#2-development-approach)
+3. [Flutter App Architecture](#3-flutter-app-architecture)
+4. [Screen Flow & Navigation](#4-screen-flow--navigation)
+5. [Checkout Flow — Detailed](#5-checkout-flow--detailed)
+6. [Flutter Data Models](#6-flutter-data-models)
+7. [State Management](#7-state-management)
+8. [Feature Specifications](#8-feature-specifications)
+9. [Prototype Reference](#9-prototype-reference)
+10. [Performance & Packaging](#10-performance--packaging)
+11. [Implementation Roadmap](#11-implementation-roadmap)
 
 ---
 
 ## 1. Overview
 
-The Fresco's Kitchen Customer Mobile App is a **cross-platform Flutter application** (Android + iOS, single codebase) that enables campus students to browse the menu, customize pizza orders, place delivery orders, track in real time, and receive WhatsApp/push notifications.
+The Fresco's Kitchen Customer Mobile App is a **cross-platform Flutter application** (Android + iOS, single codebase) that enables campus students to browse the menu, customize orders, choose their fulfillment method, pay online or at the store, track orders in real time, and download GST-compliant invoices.
 
 ### Key Characteristics
 
@@ -37,278 +35,444 @@ The Fresco's Kitchen Customer Mobile App is a **cross-platform Flutter applicati
 | **Font** | Inter (Google Fonts) |
 | **Primary Color** | `#FF6B35` (Fresco's Orange) |
 | **State Management** | Provider (ChangeNotifier) |
-| **Prototype** | `prototype/index.html` — 1,316 lines of working JS |
-| **Delivery Model** | Delivery only (no dine-in) |
-| **Delivery Time** | 25–30 minutes |
-| **Payment** | Cash on Delivery (payment gateway planned) |
+| **Prototype** | `prototype/index.html` — interactive HTML/JS prototype (approved) |
+| **Order Types** | Dine-in · Self Pickup · Delivery |
+| **Preparation Time** | 25–30 min (prep) + 10 min for delivery |
+| **Payment Methods** | Cash at Store · UPI to Delivery Agent · Razorpay |
+| **GST** | CGST 1.25% + SGST 1.25% (2.5% total) |
+| **Multi-Outlet** | Customer selects outlet at checkout |
+| **QR Ordering** | Table QR scan → auto-sets Dine-in + outlet + table number |
 
-### Prototype Data Inventory
+### Menu Data
 
-| Data | Count | Source |
-|------|-------|--------|
-| Menu Items | 23 | 6 categories: Pizza (4), Japanese (5), Sides (3), Beverages (4), Desserts (4), Combo (3) |
-| Category Tabs | 7 | All, Pizzas, Sides, Japanese, Beverages, Desserts, Combo Meals |
-| Sample Notifications | 3 | Promo, BOGO, system update |
+| Category | Items |
+|----------|-------|
+| Pizzas | 4 |
+| Japanese | 5 |
+| Sides | 3 |
+| Beverages | 4 |
+| Desserts | 4 |
+| Combo Meals | 3 |
+| **Total** | **23** |
 
 ---
 
-## 2. Architecture
+## 2. Development Approach
 
-### 2.1 High-Level System Context
+### Phases
 
-```mermaid
-graph TB
-    subgraph "Customer App (Flutter)"
-        UI["UI Layer<br/>(12 Screens)"]
-        PROV["State Layer<br/>(5 Providers)"]
-        SVC["Service Layer<br/>(API + Cache)"]
-    end
+| Phase | Description | Status |
+|-------|-------------|--------|
+| 1 | HTML Prototype (`prototype/index.html`) | ✅ Done — approved |
+| 2 | Backend APIs (Node.js/NestJS) | 🔄 In progress |
+| 3 | Flutter App — replace mock data with live APIs | ⏳ Planned |
+| 4 | Production build + app store release | ⏳ Planned |
 
-    subgraph "Backend"
-        API["REST API<br/>(NestJS / FastAPI)"]
-        WS["WebSocket Server"]
-    end
-
-    subgraph "External"
-        FCM["Firebase Cloud Messaging"]
-        WA["WhatsApp Business API"]
-    end
-
-    UI --> PROV
-    PROV --> SVC
-    SVC -->|HTTPS| API
-    SVC -->|WSS| WS
-    API --> FCM
-    API --> WA
-```
-
-### 2.2 Flutter App Layers
+### Project Structure
 
 ```
-┌──────────────────────────────────────┐
-│          UI Layer (Screens)          │
-│  Splash → Login → Home → Detail →   │
-│  Cart → Checkout → Tracking → etc   │
-├──────────────────────────────────────┤
-│       State Layer (Providers)        │
-│  AuthProvider · MenuProvider ·       │
-│  CartProvider · OrderProvider ·      │
-│  NotificationProvider                │
-├──────────────────────────────────────┤
-│       Service Layer (Data)           │
-│  ApiService · WebSocketService ·     │
-│  CacheService · NotificationService  │
-├──────────────────────────────────────┤
-│       Core Layer (Shared)            │
-│  AppTheme · AppColors · AppSpacing · │
-│  Constants · Utils · WhatsAppHelper  │
-└──────────────────────────────────────┘
+campus_food_ordering_system/
+├── prototype/
+│   ├── index.html        # Customer app prototype (approved)
+│   ├── app.js
+│   └── styles.css
+├── lib/                  # Flutter source
+│   ├── core/
+│   ├── data/
+│   ├── models/
+│   ├── providers/
+│   └── screens/
+└── docs/
 ```
 
 ---
 
-## 3. Screen Flow & Navigation
+## 3. Flutter App Architecture
 
-### 3.1 Navigation Graph
+### 3.1 App Layers
 
-```mermaid
-graph LR
-    SPLASH["Splash Screen"] --> LOGIN["Login Screen"]
-    LOGIN --> OTP["OTP Screen"]
-    OTP --> HOME["Home / Menu"]
-    HOME --> DETAIL["Item Detail"]
-    HOME --> CART["Cart Screen"]
-    HOME --> ORDERS["Order History"]
-    HOME --> PROFILE["Profile Screen"]
-    DETAIL --> CART
-    CART --> CHECKOUT["Checkout"]
-    CHECKOUT --> TRACKING["Order Tracking"]
-    ORDERS --> TRACKING
+```
+┌──────────────────────────────────────────┐
+│           UI Layer (Screens)             │
+│  Splash → Login → OTP → Home → Detail → │
+│  Cart → Checkout → Tracking → Invoice   │
+├──────────────────────────────────────────┤
+│        State Layer (Providers)           │
+│  AuthProvider · MenuProvider ·           │
+│  CartProvider · OrderProvider ·          │
+│  OutletProvider · NotificationProvider   │
+├──────────────────────────────────────────┤
+│        Service Layer                     │
+│  ApiService · WebSocketService ·         │
+│  CacheService · QRScannerService ·       │
+│  RazorpayService · InvoiceService        │
+├──────────────────────────────────────────┤
+│        Core Layer (Shared)               │
+│  AppTheme · AppColors · AppSpacing ·     │
+│  Constants · Utils · WhatsAppHelper      │
+└──────────────────────────────────────────┘
 ```
 
-### 3.2 Bottom Navigation
-
-| Tab | Icon | Screen | Provider |
-|-----|------|--------|----------|
-| Menu | `restaurant_menu` | HomeScreen | MenuProvider |
-| Orders | `receipt_long` | OrderHistoryScreen | OrderProvider |
-| Alerts | `notifications` | Notification List | NotificationProvider |
-| Profile | `person` | ProfileScreen | AuthProvider |
-
-### 3.3 Screen Inventory
-
-| # | Screen | File | Key Features | Status |
-|---|--------|------|-------------|--------|
-| 1 | Splash | `splash_screen.dart` | Animated logo, auto-navigate after 2s | ✅ Exists |
-| 2 | Login | `login_screen.dart` | Phone number input, country code | ✅ Exists |
-| 3 | OTP | `otp_screen.dart` | 6-digit OTP, resend timer, auto-verify | ✅ Exists |
-| 4 | Home / Menu | `home_screen.dart` | Category tabs (flex-wrap grid, 7 tabs), search, menu item cards, veg/non-veg badge | ✅ Exists |
-| 5 | Item Detail | `menu_item_detail_screen.dart` | Image, description, size picker (S/M/L), toppings checkboxes, crust options, qty stepper, cooking instructions, dynamic price | ✅ Exists |
-| 6 | Cart | `cart_screen.dart` | Item list with qty adjustment, subtotal, delivery charge (₹30 if < ₹500), promo code input, grand total | ✅ Exists |
-| 7 | Checkout | `checkout_screen.dart` | Delivery only, location text field (hostel/building), cooking instructions tab, order summary | ✅ Exists |
-| 8 | Payment | `payment_screen.dart` | Cash on Delivery (selected), UPI placeholder | ✅ Exists |
-| 9 | Order Tracking | `order_tracking_screen.dart` | Status stepper (Placed → Confirmed → Ready → Collected), 25-30 min ETA, slide-to-accept button | ✅ Exists |
-| 10 | Order History | `order_history_screen.dart` | Past orders list, status badges, reorder button | ✅ Exists |
-| 11 | Profile | `profile_screen.dart` | Edit name/phone, saved addresses, favorites, help/FAQ, about section | ✅ Exists |
-| 12 | Admin (Mobile) | `admin_screen.dart` | Dashboard + Orders tabs (3-tab view) | ✅ Exists |
-
----
-
-## 4. Existing Codebase
-
-### 4.1 Project Structure
+### 3.2 File Structure
 
 ```
 lib/
-├── app.dart                              # MyApp root widget with MultiProvider
-├── main.dart                             # Entry point: runApp(MyApp())
-├── injection_container.dart              # Dependency injection setup
+├── app.dart                              # MyApp root (MultiProvider)
+├── main.dart                             # Entry: runApp(MyApp())
+├── injection_container.dart              # Dependency injection
 ├── core/
 │   ├── constants/
-│   │   ├── app_colors.dart               # 20+ color constants
-│   │   └── app_spacing.dart              # xs(4) → xxxl(48) + border radii
+│   │   ├── app_colors.dart               # Color constants
+│   │   └── app_spacing.dart              # Spacing tokens xs→xxxl
 │   ├── theme/
-│   │   └── app_theme.dart                # Material3 light + dark ThemeData
+│   │   └── app_theme.dart                # Material3 ThemeData
 │   └── utils/
-│       └── whatsapp_helper.dart          # URL launcher for WhatsApp
+│       ├── whatsapp_helper.dart          # WhatsApp URL launcher
+│       └── gst_calculator.dart           # CGST/SGST calculation
 ├── data/
-│   └── mock_data.dart                    # 17 sample MenuItems (5 categories)
+│   └── mock_data.dart                    # Temporary: 23 MenuItems
 ├── models/
-│   ├── menu_item.dart                    # MenuItem (13 fields)
-│   ├── cart_item.dart                    # CartItem (menuItem, qty, instructions)
-│   └── order.dart                        # Order + OrderStatus + PaymentMethod + DeliveryType
+│   ├── menu_item.dart
+│   ├── cart_item.dart
+│   └── order.dart
 ├── providers/
-│   ├── cart_provider.dart                # CartProvider (ChangeNotifier)
-│   └── order_provider.dart               # OrderProvider (ChangeNotifier)
+│   ├── auth_provider.dart
+│   ├── menu_provider.dart
+│   ├── cart_provider.dart
+│   ├── order_provider.dart
+│   ├── outlet_provider.dart
+│   └── notification_provider.dart
 └── screens/
-    ├── admin/admin_screen.dart           # 3-tab admin panel
-    ├── auth/login_screen.dart            # Phone login
-    ├── auth/otp_screen.dart              # OTP verification
-    ├── auth/splash_screen.dart           # Splash
-    ├── cart/cart_screen.dart              # Shopping cart
-    ├── checkout/checkout_screen.dart      # Checkout flow
-    ├── home/home_screen.dart              # Menu browsing
-    ├── menu/menu_item_detail_screen.dart  # Item detail + customization
-    ├── orders/order_history_screen.dart   # History
-    ├── orders/order_tracking_screen.dart  # Live tracking
-    ├── payment/payment_screen.dart        # Payment selection
-    └── profile/profile_screen.dart        # User profile
+    ├── auth/
+    │   ├── splash_screen.dart
+    │   ├── login_screen.dart
+    │   └── otp_screen.dart
+    ├── home/
+    │   └── home_screen.dart
+    ├── menu/
+    │   └── menu_item_detail_screen.dart
+    ├── cart/
+    │   └── cart_screen.dart
+    ├── checkout/
+    │   └── checkout_screen.dart
+    ├── payment/
+    │   └── payment_screen.dart           # Razorpay WebView
+    ├── orders/
+    │   ├── order_tracking_screen.dart
+    │   └── order_history_screen.dart
+    ├── profile/
+    │   └── profile_screen.dart
+    ├── notifications/
+    │   └── notification_screen.dart
+    └── admin/
+        └── admin_screen.dart             # Lightweight mobile admin
 ```
 
-### 4.2 Dependencies (pubspec.yaml)
+### 3.3 Dependencies (pubspec.yaml)
 
 ```yaml
 dependencies:
   flutter: sdk
-  provider: ^6.1.2          # State management
-  google_fonts: ^6.2.1      # Inter font family
-  intl: ^0.19.0             # Date/number formatting
-  uuid: ^4.5.1              # Order ID generation
-  url_launcher: ^6.3.1      # WhatsApp links
+  provider: ^6.1.2           # State management
+  google_fonts: ^6.2.1       # Inter font
+  intl: ^0.19.0              # Date/number formatting
+  uuid: ^4.5.1               # Order ID generation
+  url_launcher: ^6.3.1       # WhatsApp, Razorpay links
+  flutter_secure_storage: ^9.0.0   # JWT token storage
+  cached_network_image: ^3.3.1     # Menu item images
+  mobile_scanner: ^4.0.0     # QR code scanning
+  web_socket_channel: ^2.4.0 # Real-time order updates
+  http: ^1.2.0               # REST API calls
+  razorpay_flutter: ^1.3.6   # Razorpay payment SDK
 ```
 
 ---
 
-## 5. Data Models
+## 4. Screen Flow & Navigation
 
-### 5.1 MenuItem
+### 4.1 Navigation Graph
 
-```dart
-class MenuItem {
-  final String id;            // 'pizza-1'
-  final String name;          // 'Margherita Classic'
-  final String description;   // Full text
-  final double price;         // 299.0
-  final String imageUrl;      // Asset or URL reference
-  final String category;      // 'Pizza', 'Pasta', etc.
-  final bool isVeg;           // true/false
-  final bool isAvailable;     // Active toggle
-  final double rating;        // 0.0 – 5.0
-  final int ratingCount;      // Number of ratings
-  final List<String> tags;    // ['Bestseller', 'Spicy']
-  final int prepTimeMinutes;  // 15
-}
+```mermaid
+graph LR
+    SPLASH["Splash"] --> LOGIN["Login"]
+    LOGIN --> OTP["OTP"]
+    OTP --> HOME["Home / Menu"]
+    HOME -->|QR icon| QR["QR Scanner Modal"]
+    QR -->|success| HOME
+    HOME --> DETAIL["Item Detail"]
+    HOME --> CART["Cart"]
+    HOME --> ORDERS["Order History"]
+    HOME --> PROFILE["Profile"]
+    DETAIL --> CART
+    CART --> CHECKOUT["Checkout"]
+    CHECKOUT -->|Cash / UPI| TRACKING["Order Tracking"]
+    CHECKOUT -->|Razorpay| PAYMENT["Razorpay Screen"]
+    PAYMENT --> TRACKING
+    ORDERS --> TRACKING
+    TRACKING -->|complete| INVOICE["GST Invoice"]
 ```
 
-### 5.2 Proposed Extensions
+### 4.2 Order Fulfillment Flow
+
+```mermaid
+graph TD
+    A["Browse Menu"] --> B["Select Item"]
+    B --> C["Size / Toppings / Crust"]
+    C --> D["Add to Cart"]
+    D --> E{"More items?"}
+    E -->|Yes| A
+    E -->|No| F["View Cart"]
+    F --> G["Proceed to Checkout"]
+    G --> G1["1 · Select Outlet"]
+    G1 --> H["2 · Select Order Type"]
+    H --> I["🍽️ Dine-in"]
+    H --> J["🛍️ Pickup"]
+    H --> K["🚚 Delivery"]
+    I & J --> PM["3 · Payment<br/>Cash or Razorpay"]
+    K --> DA["3a · Delivery Address"]
+    DA --> PM2["3b · Payment<br/>UPI to Agent or Razorpay"]
+    PM & PM2 --> SUM["4 · Order Summary<br/>(Subtotal + GST 2.5%)"]
+    SUM --> PLACE["5 · Place Order"]
+    PLACE --> TRACK["Order Tracking"]
+    TRACK --> SLIDE["Slide to Accept ➜"]
+    SLIDE --> DONE["✅ Complete"]
+    DONE --> INV["Download GST Invoice"]
+```
+
+### 4.3 Order Status State Machine
+
+```mermaid
+stateDiagram-v2
+    [*] --> INITIATED : Order submitted
+    INITIATED --> PAYMENT_PENDING : Razorpay redirect
+    INITIATED --> CONFIRMED : Cash / UPI order
+    INITIATED --> EXPIRED : Cron: 15-min TTL
+    PAYMENT_PENDING --> PAYMENT_SUCCESS : Razorpay webhook only
+    PAYMENT_PENDING --> EXPIRED : Cron: 15-min TTL
+    PAYMENT_SUCCESS --> CONFIRMED : Auto / kitchen
+    CONFIRMED --> PREPARING
+    CONFIRMED --> CANCELLED : Admin cancels
+    PREPARING --> READY
+    READY --> DELIVERED : Slide-to-accept / admin
+    DELIVERED --> REFUNDED : Admin refund
+    CANCELLED --> REFUNDED : If payment captured
+
+    note right of PAYMENT_SUCCESS
+        Frontend callback IGNORED.
+        Only Razorpay HMAC webhook
+        is trusted.
+    end note
+```
+
+**Transitions enforced server-side atomically. Invalid transitions return 422.**
+
+### 4.4 Slide-to-Accept States
+
+| State | Label (Pickup) | Label (Dine-in) | Label (Delivery) |
+|-------|---------------|----------------|-----------------|
+| Idle | "Slide to Collect ➜" | "Slide to Confirm Dine-in ➜" | "Slide to Accept Delivery ➜" |
+| Completed | "✔ Collected!" | "✔ Dine-in Confirmed!" | "✔ Delivered!" |
+
+Threshold: **85%** drag distance → triggers completion. Snaps back if released before.
+
+### 4.5 Order Status → Customer Labels
+
+| Status | Customer Label | Terminal? |
+|--------|---------------|----------|
+| `initiated` | "🕒 Order Created" | ❌ |
+| `payment_pending` | "⏳ Processing Payment..." | ❌ |
+| `payment_success` | "✅ Payment Confirmed" | ❌ |
+| `confirmed` | "👨‍🍳 Order Confirmed" | ❌ |
+| `preparing` | "🍳 Being Prepared" | ❌ |
+| `ready` (pickup) | "🛍️ Ready for Pickup" | ❌ |
+| `ready` (dinein) | "🍽️ Ready for Dine-in" | ❌ |
+| `ready` (delivery) | "🚚 Out for Delivery" | ❌ |
+| `delivered` | "✅ Delivered!" | ✅ |
+| `cancelled` | "Order Cancelled" | ✅ |
+| `refunded` | "💰 Refund Processed" | ✅ |
+| `expired` | "Order Expired (unpaid)" | ✅ |
+
+### 4.6 Screen Inventory
+
+| # | Screen | Key Features |
+|---|--------|-------------|
+| 1 | Splash | Animated logo, 2s auto-navigate |
+| 2 | Login | Phone number input, country code |
+| 3 | OTP | 6-digit OTP, 30s resend timer |
+| 4 | Home / Menu | Category tabs (All/Pizzas/Sides/Japanese/Beverages/Desserts/Combo), search, QR icon, veg badge |
+| 5 | QR Scanner | Animated viewfinder, table detection, auto-sets outlet + dine-in |
+| 6 | Item Detail | Image, description, size picker (S/M/L), toppings, crust, qty stepper, dynamic price |
+| 7 | Cart | Item list, qty ±, delivery charge (₹30 if < ₹500), promo code, GST lines, grand total |
+| 8 | Checkout | Outlet → Order type → Address (delivery only) → Payment → Order summary |
+| 9 | Razorpay | UPI / Card / Net Banking payment screen |
+| 10 | Order Tracking | Status stepper, ETA, type-aware labels, slide-to-accept, invoice button |
+| 11 | Order History | Past orders list, status badge, reorder button |
+| 12 | Profile | Edit name/phone, saved addresses, favorites, FAQ |
+| 13 | Notifications | Promo alerts, order updates |
+| 14 | GST Invoice | Printable PDF — GSTIN, CGST, SGST, grand total |
+
+---
+
+## 5. Checkout Flow — Detailed
+
+The checkout screen presents these sections **in order**:
+
+### Section 1 — Select Outlet
+
+| Outlet | `outlet_id` |
+|--------|------------|
+| 📍 Fresco's — Main Campus | `main-campus` |
+| 📍 Fresco's — North Block | `north-block` |
+| 📍 Fresco's — Central Food Court | `food-court` |
+
+> **QR shortcut**: Scanning a table QR code auto-populates outlet + sets Dine-in + sets table number.
+
+### Section 2 — Select Order Type
+
+| Option | Icon | Address Required | Default Payment |
+|--------|------|-----------------|----------------|
+| Dine-in | 🍽️ | ❌ | Cash at Store |
+| Self Pickup | 🛍️ | ❌ | Cash at Store |
+| Delivery | 🚚 | ✅ | UPI to Delivery Agent |
+
+### Section 3 — Delivery Address
+
+Shown **only** when Delivery is selected. Hidden for Dine-in and Pickup.
+
+### Section 4 — Payment Method
+
+Dynamically changes with order type:
+
+| Order Type | Option 1 | Option 2 |
+|-----------|----------|----------|
+| Dine-in / Pickup | Cash at Store | Razorpay |
+| Delivery | UPI to Delivery Agent | Razorpay |
+
+> When order type changes, payment selection auto-resets to default option 1.
+
+### Section 5 — Order Summary + GST
+
+```
+Margherita Pizza (Medium) x1 .............. ₹ 249
+Extra Cheese topping ...................... ₹  40
+──────────────────────────────────────────────────
+Subtotal .................................. ₹ 289
+Delivery Charge ........................... FREE
+CGST (1.25%) .............................. ₹   4
+SGST (1.25%) .............................. ₹   4
+──────────────────────────────────────────────────
+Total (incl. GST) ......................... ₹ 297
+```
+
+---
+
+## 6. Flutter Data Models
+
+### 6.1 MenuItem
 
 ```dart
-// NEW: Pizza customization support
 class MenuItem {
-  // ... existing 13 fields ...
-  final List<SizeOption> sizeOptions;       // Small/Medium/Large
-  final List<ToppingOption> toppingOptions; // Extra cheese, mushrooms, etc
-  final List<CrustOption> crustOptions;     // Thin, Thick, Stuffed
-  final String? allergenInfo;               // Dietary info
-  final int? calorieCount;                  // Nutrition
-  final bool isFeatured;                    // Homepage hero
+  final String id;
+  final String name;
+  final String description;
+  final double basePrice;
+  final String category;        // 'Pizza', 'Japanese', 'Sides', ...
+  final String icon;
+  final bool isVeg;
+  final bool isAvailable;
+  final bool isFeatured;
+  final double rating;
+  final int ratingCount;
+  final List<String> tags;      // ['Bestseller', 'Spicy']
+  final int prepTimeMinutes;
+  final String? imageUrl;
+  final List<SizeOption> sizeOptions;
+  final List<ToppingOption> toppingOptions;
+  final List<CrustOption> crustOptions;
 }
 
 class SizeOption {
-  final String id;           // 'small', 'medium', 'large'
-  final String label;        // 'Small (7")'
-  final double priceAddon;   // 0 / +50 / +100
+  final String id;
+  final String label;           // 'Small (7")'
+  final String sizeCode;        // 'small' | 'medium' | 'large'
+  final double priceAddon;
 }
 
 class ToppingOption {
   final String id;
-  final String name;         // 'Extra Cheese'
-  final double price;        // 40.0
+  final String name;            // 'Extra Cheese'
+  final double price;
   final bool isVeg;
-  final String category;     // 'cheese', 'meat', 'veggies'
+  final String category;
 }
 
 class CrustOption {
   final String id;
-  final String label;        // 'Thin Crust'
-  final double priceAddon;   // 0 / +50
+  final String label;           // 'Thin Crust'
+  final double priceAddon;
 }
 ```
 
-### 5.3 CartItem
+### 6.2 CartItem
 
 ```dart
 class CartItem {
   final MenuItem menuItem;
-  int quantity;                        // Mutable for quick ±
-  final String? specialInstructions;   // Cooking notes
-  // NEW extensions:
+  int quantity;
   final SizeOption? selectedSize;
   final List<ToppingOption> selectedToppings;
   final CrustOption? selectedCrust;
+  final String? specialInstructions;
 
-  double get totalPrice =>
-    (menuItem.price
-     + (selectedSize?.priceAddon ?? 0)
-     + selectedToppings.fold(0.0, (s, t) => s + t.price)
-     + (selectedCrust?.priceAddon ?? 0)
-    ) * quantity;
+  double get unitPrice =>
+    menuItem.basePrice
+    + (selectedSize?.priceAddon ?? 0)
+    + selectedToppings.fold(0.0, (s, t) => s + t.price)
+    + (selectedCrust?.priceAddon ?? 0);
+
+  double get totalPrice => unitPrice * quantity;
 }
 ```
 
-### 5.4 Order
+### 6.3 Order
 
 ```dart
 enum OrderStatus {
-  placed, confirmed, preparing, ready, outForDelivery, delivered, cancelled
+  initiated,       // Order created, awaiting payment
+  paymentPending,  // Redirected to Razorpay
+  paymentSuccess,  // Webhook confirmed
+  confirmed,       // Kitchen accepted + invoice assigned
+  preparing,
+  ready,
+  delivered,       // Terminal ✅
+  cancelled,       // Terminal ✅
+  refunded,        // Terminal ✅
+  expired          // Terminal ✅ (15-min TTL exceeded)
 }
-enum PaymentMethod { upi, cashOnDelivery }
-enum DeliveryType { selfPickup, delivery }
+
+enum OrderType { dineIn, selfPickup, delivery }
+
+enum PaymentMethod { cashAtStore, upiToAgent, razorpay }
 
 class Order {
-  final String id;                     // 'ORD-A1B2C3D4' or 'PIZ-20260301-0100'
+  final String id;                        // 'PIZ-20260306-0100'
+  final String outletId;                  // 'main-campus'
+  final String outletName;
+  final int? tableNumber;                 // Set for QR dine-in orders
   final List<CartItem> items;
   final double subtotal;
-  final double deliveryCharge;         // ₹30 if subtotal < ₹500
+  final double deliveryCharge;            // ₹30 if subtotal < ₹500
+  final double cgst;                      // subtotal × 1.25%
+  final double sgst;                      // subtotal × 1.25%
   final double discount;
   final double total;
-  final OrderStatus status;            // 7-state lifecycle
+  final OrderStatus status;
+  final OrderType orderType;
   final PaymentMethod paymentMethod;
-  final DeliveryType deliveryType;     // Currently: delivery only
-  final String? deliveryAddress;       // Hostel name / building
-  final String? specialInstructions;   // Cooking instructions
+  final String? deliveryAddress;          // Only for delivery
+  final String? specialInstructions;
   final DateTime createdAt;
-  final DateTime? estimatedReadyTime;  // createdAt + 20 min
+  final DateTime? estimatedReadyTime;
   final DateTime? completedAt;
   final bool isPaid;
 }
@@ -316,545 +480,210 @@ class Order {
 
 ---
 
-## 6. State Management
+## 7. State Management
 
-### 6.1 Provider Architecture
+### 7.1 Provider Architecture
 
 ```mermaid
 graph TB
-    subgraph "Providers (ChangeNotifier)"
-        AP["AuthProvider<br/>• user session<br/>• login / logout<br/>• token refresh"]
-        MP["MenuProvider<br/>• menuItems list<br/>• categories<br/>• search / filter"]
-        CP["CartProvider ✅<br/>• items, qty, totals<br/>• promo codes<br/>• delivery charge"]
-        OP["OrderProvider ✅<br/>• place order<br/>• active / completed<br/>• status tracking"]
-        NP["NotificationProvider<br/>• notifications list<br/>• unread count<br/>• mark read"]
+    subgraph "Providers"
+        AP["AuthProvider<br/>• user session<br/>• JWT tokens<br/>• login / logout"]
+        MP["MenuProvider<br/>• menu items<br/>• categories<br/>• search / filter"]
+        CP["CartProvider<br/>• items + qty<br/>• GST calculation<br/>• promo codes"]
+        OP["OrderProvider<br/>• place order<br/>• active order<br/>• history"]
+        OLP["OutletProvider<br/>• selected outlet<br/>• QR table number"]
+        NP["NotificationProvider<br/>• notifications list<br/>• unread count"]
     end
 
-    subgraph "Data Sources"
+    subgraph "Sources"
         API["Backend REST API"]
         WSS["WebSocket"]
         CACHE["Local Cache"]
+        QR["Camera / QR"]
     end
 
     AP --> API & CACHE
     MP --> API & CACHE
     CP --> CACHE
     OP --> API & WSS
+    OLP --> QR & CACHE
     NP --> WSS
 ```
 
-### 6.2 CartProvider (Existing)
-
-| Method | Signature | Behavior |
-|--------|-----------|----------|
-| `addItem` | `addItem(MenuItem, {qty, instructions})` | Add or increment if exists |
-| `removeItem` | `removeItem(String menuItemId)` | Remove by ID |
-| `updateQuantity` | `updateQuantity(String id, int qty)` | Set qty; remove if ≤ 0 |
-| `incrementQuantity` | `incrementQuantity(String id)` | +1 |
-| `decrementQuantity` | `decrementQuantity(String id)` | -1 or remove if qty = 1 |
-| `clearCart` | `clearCart()` | Remove all items |
-
-**Computed Properties:**
+### 7.2 CartProvider — Computed Properties
 
 | Property | Formula |
 |----------|---------|
-| `items` | Unmodifiable list |
-| `itemCount` | Sum of all quantities |
-| `subtotal` | Sum of item.totalPrice |
+| `subtotal` | Sum of `item.totalPrice` |
 | `deliveryCharge` | ₹30 if subtotal < ₹500, else ₹0 |
-| `total` | subtotal + deliveryCharge |
-| `isEmpty` | items.isEmpty |
+| `cgst` | `round(subtotal × 0.0125, 2)` |
+| `sgst` | `round(subtotal × 0.0125, 2)` |
+| `grandTotal` | subtotal + deliveryCharge + cgst + sgst − discount |
 
-### 6.3 OrderProvider (Existing)
+### 7.3 CartProvider — Methods
 
 | Method | Behavior |
-|--------|----------|
-| `placeOrder({items, subtotal, ...})` | Creates order with UUID, starts status simulation |
-| `updateOrderStatus(id, status)` | Updates status, sets completedAt if delivered |
-| `cancelOrder(id)` | Sets status = cancelled |
-| `_simulateOrderProgress(id)` | Timer-based demo: placed→confirmed(8s)→preparing(12s)→ready(20s)→delivered(15s) |
-
-### 6.4 New Providers (To Build)
-
-```dart
-// AuthProvider
-class AuthProvider extends ChangeNotifier {
-  User? _user;
-  String? _accessToken;
-  Future<void> sendOtp(String phone);
-  Future<void> verifyOtp(String phone, String otp);
-  Future<void> refreshToken();
-  Future<void> logout();
-  Future<void> updateProfile(String name, String phone);
-}
-
-// MenuProvider
-class MenuProvider extends ChangeNotifier {
-  List<MenuItem> _items = [];
-  List<String> _categories = [];
-  String _searchQuery = '';
-  String _activeCategory = 'All';
-  Future<void> fetchMenu();
-  List<MenuItem> get filteredItems;
-}
-
-// NotificationProvider
-class NotificationProvider extends ChangeNotifier {
-  List<AppNotification> _notifications = [];
-  int get unreadCount;
-  void markAsRead(String id);
-  void markAllRead();
-}
-```
-
-### 6.5 Caching Strategy
-
-| Data | Duration | Storage | Invalidation |
-|------|----------|---------|-------------|
-| Menu items | 30 minutes | SharedPreferences | Manual refresh or category change |
-| Categories | 1 hour | SharedPreferences | Rare admin change |
-| Auth token | Until refresh | flutter_secure_storage | Logout or 401 |
-| Cart items | Persistent | Hive box | clearCart() or order placed |
-| Order history | 5 minutes | Memory | New order or status change |
-| Notifications | Real-time | Memory | WebSocket push |
+|--------|---------|
+| `addItem(item)` | Add or increment if same item+customizations |
+| `removeItem(id)` | Remove line item |
+| `updateQuantity(id, qty)` | Set qty; remove if ≤ 0 |
+| `applyPromo(code)` | Validate via API, apply discount |
+| `clearCart()` | Empty cart post-order |
 
 ---
 
-## 7. Feature Specifications
+## 8. Feature Specifications
 
-### 7.1 Menu Browsing
+### 8.1 QR-Based Table Ordering
 
-- **Categories**: 7 tabs displayed in flex-wrap grid (2 rows), all visible without scrolling
-- **Item Cards**: Color-coded gradient header with Material Icon, name, description, price (₹), veg/non-veg badge
-- **Quick Add**: One-tap add to cart from the menu grid
-- **Search**: Real-time filtering by item name
+| Step | Action |
+|------|--------|
+| 1 | Tap QR icon in home screen top bar |
+| 2 | Camera opens with animated scanner viewfinder |
+| 3 | Scan table QR code (outlet + table embedded) |
+| 4 | Toast: "Table #7 linked — Dine-in mode set!" |
+| 5 | On checkout: Outlet + Order type pre-filled; table number sent with order |
 
-### 7.2 Pizza Customization
+### 5.3 Menu Customization (Pizza)
 
-| Option | Values | Price Impact |
-|--------|--------|-------------|
-| **Size** | Small (7") · Medium (10") · Large (13") | +₹0 · +₹50 · +₹100 |
-| **Crust** | Classic · Thin · Cheese Stuffed | +₹0 · +₹0 · +₹50 |
-| **Toppings** | Extra Cheese · Mushrooms · Chicken · Jalapenos | ₹30–₹60 each |
-| **Quantity** | 1-10 via stepper | × multiplier |
-| **Instructions** | Free text (renamed "Cooking Instructions") | — |
+| Option | UI | Notes |
+|--------|-----|-------|
+| Size | Radio (S/M/L) | Adds ₹0 / ₹50 / ₹100 |
+| Crust | Radio | Thin (₹0), Thick (₹20), Stuffed (₹50) |
+| Toppings | Checkboxes | Multi-select; individual prices |
+| Quantity | Stepper | Min 1 |
+| Instructions | Text field | Free-form cooking notes |
 
-### 7.3 Order Restrictions
+> Dynamic price updates in real-time as options change.
 
-- **Beverage-only orders blocked**: Must include at least 1 food item (non-beverage/dessert)
-- Validation triggers at checkout with user-friendly message
+### 5.4 Payment Flows
 
-### 7.4 Order Tracking
+**Cash at Store / UPI to Agent (Cash orders)**
+- Order created: `initiated` → auto-advances to `confirmed` (no payment gate)
+- Staff manually marks paid via admin portal
 
-| Status | Display | Timer |
-|--------|---------|-------|
-| Placed | "Order Placed" | — |
-| Confirmed | "Order Confirmed" | ~2 min after placement |
-| Ready | "Ready for Pickup" | ~15-17 min after confirmed |
-| Delivered/Collected | "Collected" via slide-to-accept | Customer action |
+**Razorpay (Online payment)**
+- Order created: `initiated`
+- POST `/payments/razorpay/create` → get Razorpay order ID → status → `payment_pending`
+- Customer completes UPI / Card / Net Banking in Razorpay SDK
+- Razorpay sends **webhook** to server (HMAC SHA256 verified)
+- Server atomically: `payment_pending` → `payment_success` → `confirmed`, invoice assigned
+- **Frontend payment callback is ignored.** Poll `GET /orders/:id` until status = `confirmed`
 
-- **ETA**: 25–30 minutes displayed on tracking screen
-- **Slide to Accept**: Customer drags slider to confirm physical pickup
+### 5.5 GST Invoice
 
-### 7.5 WhatsApp Notification
+Available on the Order Tracking screen after `confirmed` status:
 
-Auto-triggered on order placement. Uses `url_launcher` to open WhatsApp with pre-formatted message containing order ID, items, total, and ETA.
+| Invoice Field | Value |
+|--------------|-------|
+| Invoice Number | `{OUTLET_CODE}-{FY}-{SEQUENCE}` e.g. `IITH-FY26-000145` |
+| GSTIN | Per-outlet (e.g. `29AABCF1234C1Z5`) |
+| Outlet Name & Address | From outlet selection |
+| Table Number | Shown if QR order |
+| Items | Name, qty, rate, amount |
+| Subtotal | Pre-tax |
+| CGST @ 1.25% | Computed |
+| SGST @ 1.25% | Computed |
+| Grand Total | All-inclusive |
+| Print / Download | Browser print or PDF download |
+| Credit Note | Generated if order is `refunded` |
 
-### 7.6 Profile Features
+### 8.5 Order Type Behaviour Summary
 
-- Edit name, phone number
-- Saved delivery addresses (hostel/building names)
-- Favorites list
-- Order history quick access
-- Help & FAQ section
+| Type | Address? | Payment default | Tracking label | Slide text |
+|------|----------|----------------|----------------|-----------|
+| Dine-in | ❌ | Cash at Store | "Ready for Dine-in 🍽️" | "Slide to Confirm Dine-in ➜" |
+| Pickup | ❌ | Cash at Store | "Ready for Pickup 🛍️" | "Slide to Collect ➜" |
+| Delivery | ✅ | UPI to Agent | "Out for Delivery 🚚" | "Slide to Accept Delivery ➜" |
+
+### 8.6 Notifications
+
+| Trigger | Channel | Message |
+|---------|---------|---------|
+| Order placed | FCM + WhatsApp | Confirmation with ETA |
+| Order confirmed | FCM | "Kitchen started preparing your order" |
+| Order ready | FCM + WhatsApp | Type-appropriate ready message |
+| Delivery dispatched | FCM | "Your order is on the way!" |
+| Payment confirmed | FCM | "Payment of ₹XXX received" |
+
+### 8.7 Profile Features
+
+- Edit name and phone
+- Saved delivery addresses (hostel/building)
+- Favorites list with quick ADD button
+- Order history with reorder button
+- Help / FAQ
 - About Fresco's Kitchen
 
 ---
 
-## 8. Backend API Integration
+## 9. Prototype Reference
 
-### 8.1 API Configuration
+The approved HTML prototype is the **source of truth** for UI/UX during Flutter development.
 
-```dart
-class ApiConfig {
-  static const baseUrl = 'https://api.frescoskitchen.com/v1';
-  static const wsUrl = 'wss://api.frescoskitchen.com/ws';
-  static const timeout = Duration(seconds: 30);
-}
-```
+| File | Purpose |
+|------|---------|
+| `prototype/index.html` | All screens and navigation in one file |
+| `prototype/app.js` | State management, checkout logic, GST calc, QR sim, Razorpay sim, invoice gen |
+| `prototype/styles.css` | Full design system: colors, typography, components, animations |
 
-### 8.2 Customer-Facing Endpoints
+### Key Prototype Functions to Mirror in Flutter
 
-#### Authentication
-
-| Method | Endpoint | Description | Auth |
-|--------|----------|-------------|------|
-| `POST` | `/auth/send-otp` | Send OTP to phone | Public |
-| `POST` | `/auth/verify-otp` | Verify → JWT pair | Public |
-| `POST` | `/auth/refresh` | Refresh access token | Bearer |
-| `POST` | `/auth/logout` | Invalidate tokens | Bearer |
-| `GET` | `/auth/profile` | Get profile | Bearer |
-| `PUT` | `/auth/profile` | Update profile | Bearer |
-
-#### Menu
-
-| Method | Endpoint | Description | Auth |
-|--------|----------|-------------|------|
-| `GET` | `/menu/items` | List items (filtered) | Public |
-| `GET` | `/menu/items/:id` | Item detail with options | Public |
-| `GET` | `/menu/categories` | List categories | Public |
-
-**Query Parameters**: `?category=pizza&search=margherita&is_veg=true&sort=price_asc&page=1&limit=20`
-
-#### Orders
-
-| Method | Endpoint | Description | Auth |
-|--------|----------|-------------|------|
-| `POST` | `/orders` | Place new order | Bearer |
-| `GET` | `/orders` | My order history | Bearer |
-| `GET` | `/orders/:id` | Order detail | Bearer |
-| `POST` | `/orders/:id/cancel` | Cancel order | Bearer |
-
-**Request: Place Order**
-```json
-{
-  "items": [{
-    "menu_item_id": "pizza-1",
-    "quantity": 2,
-    "size": "medium",
-    "crust": "thin",
-    "toppings": ["extra-cheese", "mushrooms"],
-    "special_instructions": "Extra crispy"
-  }],
-  "delivery_type": "delivery",
-  "delivery_address": "Hostel A, Room 204",
-  "payment_method": "cash_on_delivery",
-  "promo_code": "PIZZABOGO"
-}
-```
-
-**Response: Order Created**
-```json
-{
-  "id": "PIZ-20260301-0100",
-  "status": "placed",
-  "items": [...],
-  "subtotal": 698.0,
-  "delivery_charge": 30.0,
-  "discount": 0.0,
-  "total": 728.0,
-  "estimated_ready_time": "2026-03-01T15:45:00Z",
-  "created_at": "2026-03-01T15:20:00Z"
-}
-```
-
-#### Promotions
-
-| Method | Endpoint | Description | Auth |
-|--------|----------|-------------|------|
-| `GET` | `/promotions` | Active promos | Public |
-| `POST` | `/promotions/validate` | Validate/apply code | Bearer |
-
-#### Delivery Addresses
-
-| Method | Endpoint | Description | Auth |
-|--------|----------|-------------|------|
-| `GET` | `/addresses` | My saved addresses | Bearer |
-| `POST` | `/addresses` | Add address | Bearer |
-| `PUT` | `/addresses/:id` | Update | Bearer |
-| `DELETE` | `/addresses/:id` | Remove | Bearer |
-
-### 8.3 Error Handling
-
-```dart
-class ApiException implements Exception {
-  final int statusCode;
-  final String code;     // 'VALIDATION_ERROR', 'UNAUTHORIZED', etc.
-  final String message;
-  final List<FieldError>? details;
-}
-```
-
-| HTTP | Code | Action |
-|------|------|--------|
-| 401 | `UNAUTHORIZED` | Attempt token refresh → re-login |
-| 403 | `FORBIDDEN` | Show access denied |
-| 422 | `VALIDATION_ERROR` | Show field-level errors |
-| 429 | `RATE_LIMITED` | Show retry message |
+| Prototype Function | Flutter Equivalent |
+|-------------------|-------------------|
+| `onOrderTypeChange()` | `OrderProvider.setOrderType()` + rebuild checkout |
+| `onPaymentMethodChange()` | `CartProvider.setPaymentMethod()` |
+| `onOutletChange()` | `OutletProvider.selectOutlet()` |
+| `renderCheckoutSummary()` | `CheckoutScreen._buildSummary()` with GST lines |
+| `getGrandTotal()` | `CartProvider.grandTotal` getter |
+| `simulateQRScan()` | `QRScannerService.applyTableScan()` |
+| `downloadInvoice()` | `InvoiceService.generateAndOpen()` |
+| `confirmOrder()` | `OrderProvider.placeOrder()` |
 
 ---
 
-## 9. Database Schema
+## 10. Performance & Packaging
 
-### 9.1 Customer-Facing Tables
-
-```mermaid
-erDiagram
-    USERS ||--o{ ORDERS : places
-    USERS ||--o{ DELIVERY_ADDRESSES : has
-    USERS ||--o{ NOTIFICATIONS : receives
-    MENU_CATEGORIES ||--o{ MENU_ITEMS : contains
-    MENU_ITEMS ||--o{ ITEM_SIZE_OPTIONS : has
-    MENU_ITEMS ||--o{ ITEM_TOPPING_OPTIONS : has
-    ORDERS ||--o{ ORDER_ITEMS : contains
-    ORDERS ||--o{ ORDER_STATUS_HISTORY : tracks
-    ORDER_ITEMS ||--o{ ORDER_ITEM_CUSTOMIZATIONS : has
-
-    USERS {
-        uuid id PK
-        varchar phone UK
-        varchar name
-        varchar email
-        varchar avatar_url
-        boolean is_active
-        timestamp created_at
-    }
-
-    MENU_ITEMS {
-        uuid id PK
-        uuid category_id FK
-        varchar name
-        text description
-        decimal price
-        varchar image_url
-        boolean is_veg
-        boolean is_available
-        decimal rating
-        int rating_count
-        text tags
-        int prep_time_minutes
-        boolean is_deleted
-    }
-
-    ITEM_SIZE_OPTIONS {
-        uuid id PK
-        uuid menu_item_id FK
-        varchar label
-        varchar size_code
-        decimal price_addon
-    }
-
-    ITEM_TOPPING_OPTIONS {
-        uuid id PK
-        uuid menu_item_id FK
-        varchar name
-        decimal price
-        boolean is_veg
-        varchar category
-    }
-
-    ORDERS {
-        uuid id PK
-        varchar order_number UK
-        uuid customer_id FK
-        enum status
-        enum payment_method
-        varchar delivery_address
-        decimal subtotal
-        decimal delivery_charge
-        decimal discount
-        decimal total
-        text special_instructions
-        boolean is_paid
-        timestamp estimated_ready_time
-        timestamp created_at
-        timestamp completed_at
-    }
-
-    ORDER_ITEMS {
-        uuid id PK
-        uuid order_id FK
-        uuid menu_item_id FK
-        varchar item_name
-        decimal item_price
-        int quantity
-        varchar size_selected
-        varchar crust_selected
-        decimal line_total
-    }
-
-    ORDER_ITEM_CUSTOMIZATIONS {
-        uuid id PK
-        uuid order_item_id FK
-        varchar type
-        varchar name
-        decimal price
-    }
-
-    DELIVERY_ADDRESSES {
-        uuid id PK
-        uuid user_id FK
-        varchar label
-        varchar building_name
-        varchar floor_room
-        boolean is_default
-    }
-
-    NOTIFICATIONS {
-        uuid id PK
-        uuid user_id FK
-        varchar title
-        text body
-        enum type
-        boolean is_read
-        timestamp created_at
-    }
-```
-
----
-
-## 10. Real-Time & Notifications
-
-### 10.1 WebSocket Connection
-
-```dart
-class WebSocketService {
-  late WebSocketChannel _channel;
-
-  void connect(String token) {
-    _channel = WebSocketChannel.connect(
-      Uri.parse('${ApiConfig.wsUrl}?token=$token'),
-    );
-    _channel.stream.listen(_handleMessage);
-  }
-
-  void _handleMessage(dynamic data) {
-    final event = json.decode(data);
-    switch (event['type']) {
-      case 'order:status_changed':
-        // Update OrderProvider
-      case 'notification:push':
-        // Update NotificationProvider + show local notification
-    }
-  }
-}
-```
-
-### 10.2 Events (Client Receives)
-
-| Event | Payload | Action |
-|-------|---------|--------|
-| `order:status_changed` | `{order_id, status, timestamp}` | Update OrderProvider, show push |
-| `order:ready` | `{order_id}` | Show "Ready for pickup!" alert |
-| `notification:push` | `{title, body, type}` | Add to NotificationProvider |
-
-### 10.3 Push Notifications (FCM)
-
-| Trigger | Message |
+| Concern | Strategy |
 |---------|---------|
-| Order Confirmed | "Your order #PIZ-XXX is confirmed! ETA: 25 mins 🍕" |
-| Order Ready | "Your order is ready for pickup! Visit Fresco's Kitchen" |
-| Promotional | "BOGO on all pizzas this Saturday! Use code PIZZABOGO" |
+| App startup | Lazy-load heavy screens; cache menu on first load |
+| Images | `cached_network_image` with skeleton placeholder |
+| API calls | Response caching via Redis; debounced search (300ms) |
+| Real-time | WebSocket with exponential backoff reconnect |
+| Offline | Show cached menu and order history from local DB |
+| Bundle size | Tree-shake unused icons; defer Razorpay SDK |
+| Accessibility | Semantic labels on all interactive elements |
 
-### 10.4 WhatsApp Auto-Notification
+### Build Targets
 
-Triggered on order placement via `whatsapp_helper.dart`:
-```
-🍕 Fresco's Kitchen Order Confirmed!
-Order: #PIZ-20260301-0100
-Items: 2x Margherita Pizza (Medium)
-Total: ₹728
-ETA: 25-30 mins
-```
+```bash
+# Android APK
+flutter build apk --release
 
----
+# Android App Bundle (Play Store)
+flutter build appbundle --release
 
-## 11. Security
-
-### 11.1 Authentication Flow
-
-```mermaid
-graph LR
-    PHONE["Phone + OTP<br/>(6-digit, 5-min TTL)"] -->|Verify| JWT["JWT Pair<br/>(Access: 1h, Refresh: 30d)"]
-    JWT --> SECURE["flutter_secure_storage"]
-    SECURE --> HEADER["Authorization: Bearer xxx"]
+# iOS (requires macOS)
+flutter build ios --release
 ```
 
-### 11.2 Security Measures
-
-| Layer | Measure |
-|-------|---------|
-| **Token Storage** | `flutter_secure_storage` (Keychain/Keystore) |
-| **Transport** | TLS 1.3 only |
-| **OTP** | 3 attempts/10 min, 5-min expiry |
-| **Input** | Client-side + server-side validation |
-| **Data** | Only own orders/profile accessible |
-| **Certificate Pinning** | Planned for production |
-
 ---
 
-## 12. Performance & Deployment
+## 11. Implementation Roadmap
 
-### 12.1 Performance Targets
-
-| Metric | Target |
-|--------|--------|
-| App cold start | < 2 seconds |
-| Menu load | < 500ms (cached) |
-| Image load | < 500ms (CDN) |
-| Order placement | < 1 second |
-| Push notification | < 3 seconds |
-
-### 12.2 Optimization Strategies
-
-- **Image caching**: `cached_network_image` with memory + disk cache
-- **Lazy loading**: Menu items paginated, loaded on scroll
-- **State preservation**: Cart persisted to Hive across app restarts
-- **Skeleton screens**: Shimmer placeholders during data loading
-- **Compression**: WebP images, gzip API responses
-
-### 12.3 Deployment
-
-| Platform | Store | Requirements |
-|----------|-------|-------------|
-| Android | Google Play Store | Min SDK 21, Target SDK 34 |
-| iOS | Apple App Store | Min iOS 13.0 |
-| Testing | Firebase App Distribution | Internal beta testing |
-
----
-
-## 13. Implementation Roadmap
-
-### Phase 1 — Backend + Auth (Week 1-2)
-
-| Task | Priority |
-|------|----------|
-| Set up backend project | 🔴 Critical |
-| Database schema + migrations | 🔴 Critical |
-| Auth API (OTP + JWT) | 🔴 Critical |
-| AuthProvider + Login/OTP screens connect | 🔴 Critical |
-
-### Phase 2 — Menu + Cart (Week 3-4)
-
-| Task | Priority |
-|------|----------|
-| Menu API with filters/search | 🔴 Critical |
-| MenuProvider replacing mock_data.dart | 🔴 Critical |
-| Extended CartItem with size/toppings | 🟡 High |
-| Image upload + CDN for menu items | 🟡 High |
-
-### Phase 3 — Orders + Real-time (Week 5-6)
-
-| Task | Priority |
-|------|----------|
-| Order API with lifecycle | 🔴 Critical |
-| WebSocket for status updates | 🔴 Critical |
-| Replace _simulateOrderProgress with real events | 🔴 Critical |
-| FCM push notifications | 🟡 High |
-| WhatsApp Business API integration | 🟡 High |
-
-### Phase 4 — Polish + Launch (Week 7-8)
-
-| Task | Priority |
-|------|----------|
-| Profile API + addresses | 🟡 High |
-| Promo code validation | 🟢 Medium |
-| Performance optimization | 🟡 High |
-| Security audit | 🔴 Critical |
-| App Store / Play Store submission | 🔴 Critical |
-
----
-
-> **Prototype Reference**: [prototype/index.html](../prototype/index.html) — Live at `http://localhost:8090`  
-> **Flutter Source**: [lib/](../lib/) — 12 screens, 3 models, 2 providers  
-> **Companion**: [Admin Portal System Design](./admin_portal_system_design.md)
+| Phase | Milestone | Dependencies |
+|-------|-----------|-------------|
+| ✅ 0 | HTML Prototype approved | — |
+| 🔄 1 | Backend Auth module live | — |
+| 🔄 2 | Backend Menu & Outlets live | Phase 1 |
+| 🔄 3 | Flutter — Auth screens (Login, OTP, Splash) | Phase 1 |
+| 🔄 4 | Flutter — Home & Item Detail (live menu) | Phase 2 |
+| 🔄 5 | Flutter — Cart with GST calculation | Phase 2 |
+| 🔄 6 | Backend — Orders + Payments live | Phase 1,2 |
+| 🔄 7 | Flutter — Checkout (outlet, order type, payment) | Phase 3,6 |
+| 🔄 8 | Flutter — Razorpay SDK integration | Phase 6 |
+| 🔄 9 | Flutter — Order Tracking with WebSocket | Phase 6 |
+| 🔄 10 | Flutter — GST Invoice (PDF/print) | Phase 6 |
+| 🔄 11 | Flutter — QR Scanner (mobile_scanner) | Phase 2 |
+| 🔄 12 | Flutter — Profile, History, Notifications | Phase 1,6 |
+| 🔄 13 | App Store / Play Store release | All phases |

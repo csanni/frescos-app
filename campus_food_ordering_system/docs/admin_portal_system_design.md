@@ -1,6 +1,6 @@
 # Fresco's Kitchen — Admin Portal System Design
 
-**Version:** 2.0 · **Date:** 1 March 2026 · **Author:** Engineering Team  
+**Version:** 3.0 · **Date:** 6 March 2026 · **Author:** Engineering Team  
 **Companion Document:** [Customer App System Design](./customer_app_system_design.md)
 
 ---
@@ -8,24 +8,24 @@
 ## Table of Contents
 
 1. [Overview](#1-overview)
-2. [Architecture](#2-architecture)
-3. [Module Specifications](#3-module-specifications)
-4. [Design System](#4-design-system)
-5. [Data Models & Sample Data](#5-data-models--sample-data)
-6. [Backend API (Admin Endpoints)](#6-backend-api)
-7. [Database Schema (Admin-Specific)](#7-database-schema)
-8. [State Management](#8-state-management)
-9. [Real-Time Order Management](#9-real-time-order-management)
-10. [Reports & Analytics Engine](#10-reports--analytics-engine)
-11. [Security & RBAC](#11-security--rbac)
-12. [Deployment & Infrastructure](#12-deployment--infrastructure)
+2. [Development Approach](#2-development-approach)
+3. [Architecture](#3-architecture)
+4. [Module Specifications](#4-module-specifications)
+5. [Design System](#5-design-system)
+6. [Data Models & Sample Data](#6-data-models--sample-data)
+7. [Backend API (Admin Endpoints)](#7-backend-api)
+8. [Authentication & RBAC](#8-authentication--rbac)
+9. [Database Schema](#9-database-schema)
+10. [Real-Time Order Management](#10-real-time-order-management)
+11. [Reports & Analytics Engine](#11-reports--analytics-engine)
+12. [Security & Infrastructure](#12-security--infrastructure)
 13. [Implementation Roadmap](#13-implementation-roadmap)
 
 ---
 
 ## 1. Overview
 
-The Fresco's Kitchen Admin Portal is a **web-based administration system** providing full operational control over the restaurant ecosystem. An interactive HTML prototype is already built and functional, with a parallel mobile admin panel in Flutter.
+The Fresco's Kitchen Admin Portal is a **web-based administration system** providing full operational control over the restaurant ecosystem — menu, orders, customers, inventory, payments, staff, analytics, and multi-outlet management. An interactive HTML prototype is fully functional and approved.
 
 ### Key Characteristics
 
@@ -40,14 +40,18 @@ The Fresco's Kitchen Admin Portal is a **web-based administration system** provi
 | **Font** | Inter (Google Fonts) |
 | **Modules** | 10 full modules |
 | **Responsive** | Desktop (1280px+), Tablet (768px+), Mobile (sidebar overlay) |
+| **Multi-Outlet** | Settings and analytics scoped per outlet |
+| **GST Compliance** | CGST 1.25% + SGST 1.25% in invoices and reports |
+| **QR Management** | Generate/print table QR codes per outlet |
 
 ### Prototype Data Inventory
 
 | Data | Count | Details |
 |------|-------|---------|
 | Menu Items | **23** | Pizza (4), Japanese (5), Sides (3), Beverages (4), Desserts (4), Combo (3) |
-| Orders | **40** | 5 statuses: placed, confirmed, ready, delivered, cancelled |
+| Orders | **40** | 5 statuses · 3 order types: dine-in, pickup, delivery |
 | Customers | **15** | Names, phones, order counts, total spent |
+| Outlets | **3** | Main Campus, North Block, Central Food Court |
 | Inventory | **10** | Across 8 categories with stock levels |
 | Staff | **6** | Super Admin, Kitchen Manager, Delivery Manager, Cashier, 2 Chefs |
 | Promotions | **4** | PIZZABOGO, WELCOME30, COMBO100, FREEDELIVERY |
@@ -56,55 +60,105 @@ The Fresco's Kitchen Admin Portal is a **web-based administration system** provi
 ### Prototype File Summary
 
 | File | Lines | Size | Responsibilities |
-|------|-------|------|-----------------|
-| `admin.html` | ~1,316 | — | Layout: sidebar, topbar, 10 page sections, 3 modals |
+|------|-------|------|----------------|
+| `admin.html` | ~1,350 | — | Layout: sidebar, topbar, 10 page sections, 3 modals |
 | `admin.css` | ~1,080 | — | Design tokens, component styles, animations, responsive |
-| `admin.js` | 557 | 46KB | Data generation, rendering, CRUD logic, reports engine |
+| `admin.js` | ~600 | ~50KB | Data generation, rendering, CRUD logic, reports engine, QR, invoice reprint |
 
 ---
 
-## 2. Architecture
+## 2. Development Approach
 
-### 2.1 Portal Architecture
+### 2.1 Phased Development
+
+```
+Phase 1: HTML Prototype    ──►  Client approval  ──►  ✅ DONE
+Phase 2: Backend APIs      ──►  Build module by module (9 modules)
+Phase 3: Flutter Web Admin ──►  Connect to live APIs, replace mock data
+Phase 4: Production        ──►  Docker + AWS/GCP, monitoring, CI/CD
+```
+
+### 2.2 Monorepo Architecture
+
+```
+frescos-app/
+├── campus_food_ordering_system/
+│   ├── prototype/         # HTML/JS prototypes (customer + admin — approved)
+│   ├── docs/              # System design documents
+│   ├── lib/               # Flutter (shared customer + admin codebase)
+│   │   ├── screens/admin/ # Admin portal Flutter screens
+│   │   └── screens/...    # Customer screens
+│   └── backend/           # Node.js API server (future)
+│       ├── src/auth/
+│       ├── src/menu/
+│       ├── src/orders/
+│       ├── src/payments/
+│       ├── src/inventory/
+│       ├── src/analytics/
+│       ├── src/notifications/
+│       └── src/staff/
+```
+
+### 2.3 Backend Modules
+
+| # | Module | Admin Responsibilities |
+|---|--------|----------------------|
+| 1 | **Auth & Authorization** | Staff login, JWT, RBAC role assignment |
+| 2 | **User Management** | Customer directory, staff profiles |
+| 3 | **Menu & Content** | Full CRUD, image uploads, outlet availability |
+| 4 | **Orders** | Status management, GST invoice reprint, timeline tracking |
+| 5 | **Inventory** | Stock updates, low-stock alerts, restock logging |
+| 6 | **Payments** | Transaction records, Razorpay reconciliation |
+| 7 | **Analytics & Reporting** | Daily → Annual reports, materialized views |
+| 8 | **Admin Operations** | Outlet config, QR code generation, operating hours |
+| 9 | **Notifications** | Broadcast alerts to customers, staff alerts |
+
+---
+
+## 3. Architecture
+
+### 3.1 Portal Architecture
 
 ```mermaid
 graph TB
     subgraph "Admin Portal (Flutter Web / HTML)"
         SIDEBAR["Sidebar Navigation<br/>(10 modules)"]
-        TOPBAR["Top Bar<br/>(Search, Notifications, Customer App link)"]
+        TOPBAR["Top Bar<br/>(Search, Notifications, Outlet Switcher)"]
         PAGES["Page Content<br/>(Dashboard, Menu, Orders, etc.)"]
-        MODALS["Modals<br/>(Add/Edit Item, Delete Confirm, Order Detail)"]
+        MODALS["Modals<br/>(Add/Edit Item, Delete Confirm, Order Detail, QR Generator)"]
     end
 
-    subgraph "Backend Services"
+    subgraph "Backend Services (Node.js / NestJS)"
         AUTH["Auth Service<br/>(JWT + RBAC)"]
         MENU_SVC["Menu Service<br/>(CRUD + Images)"]
-        ORDER_SVC["Order Service<br/>(Status + Timeline)"]
+        ORDER_SVC["Order Service<br/>(Status + GST Invoice)"]
         ANALYTICS_SVC["Analytics Service<br/>(Reports Engine)"]
         MEDIA_SVC["Media Service<br/>(Upload + Library)"]
+        PAY_SVC["Payment Service<br/>(Razorpay + Cash Records)"]
     end
 
     subgraph "Data Layer"
-        PG["PostgreSQL"]
-        REDIS["Redis Cache"]
-        S3["S3 / MinIO<br/>(Media Storage)"]
+        PG["PostgreSQL<br/>(Materialized views for analytics)"]
+        REDIS["Redis Cache<br/>(Sessions, order state)"]
+        S3["S3 / MinIO<br/>(Media, Invoice PDFs)"]
     end
 
     SIDEBAR --> PAGES
     TOPBAR --> PAGES
-    PAGES --> AUTH & MENU_SVC & ORDER_SVC & ANALYTICS_SVC & MEDIA_SVC
+    PAGES --> AUTH & MENU_SVC & ORDER_SVC & ANALYTICS_SVC & MEDIA_SVC & PAY_SVC
     MODALS --> MENU_SVC & ORDER_SVC
     MENU_SVC --> PG & S3
     ORDER_SVC --> PG & REDIS
     ANALYTICS_SVC --> PG
     MEDIA_SVC --> S3
+    PAY_SVC --> PG
 ```
 
-### 2.2 Navigation Structure
+### 3.2 Navigation Structure
 
 ```mermaid
 graph TB
-    SIDEBAR["🍕 Frescoz<br/>Admin Portal"]
+    SIDEBAR["🍕 Fresco's Kitchen<br/>Admin Portal"]
 
     subgraph "MAIN"
         DASH["📊 Dashboard"]
@@ -134,73 +188,91 @@ graph TB
     SIDEBAR --> INV & STAFF & SETTINGS
 ```
 
-### 2.3 Sidebar Navigation Badges
+### 3.3 Sidebar Navigation Badges
 
 | Module | Badge | Meaning |
 |--------|-------|---------|
 | Menu Management | `23` | Active menu items count |
 | Orders | `5` | New/pending orders |
-| Inventory | `3` | Low-stock items |
+| Inventory | `3` | Low-stock items requiring reorder |
 
 ---
 
-## 3. Module Specifications
+## 4. Module Specifications
 
-### 3.1 Dashboard
+### 4.1 Dashboard
 
-**Purpose**: At-a-glance overview of restaurant operations.
+**Purpose**: At-a-glance restaurant operations overview.
 
-| Component | Data | Source (admin.js) |
-|-----------|------|-------------------|
-| **KPI Card: Revenue** | ₹48,520 (↑12.5%) | Computed from orders |
-| **KPI Card: Orders** | 127 (↑8.3%) | Order count |
-| **KPI Card: Customers** | 342 (↑3.1%) | Customer count |
-| **KPI Card: Avg. Order** | ₹382 (↓2.1%) | Revenue / orders |
+| Component | Data | Source |
+|-----------|------|--------|
+| **KPI: Revenue** | ₹48,520 (↑12.5%) | Computed from orders |
+| **KPI: Orders** | 127 (↑8.3%) | Order count |
+| **KPI: Customers** | 342 (↑3.1%) | Unique customer count |
+| **KPI: Avg. Order** | ₹382 (↓2.1%) | Revenue / orders |
 | **Revenue Trend Chart** | 7-day bar chart | Mon–Sun values |
-| **Popular Items** | Top 6 items ranked | Sorted by `orders` field |
-| **Recent Orders Table** | Last 8 orders | id, customer, items, total, status, time |
-| **Status Donut Chart** | 5-segment SVG donut | placed/confirmed/ready/delivered/cancelled |
+| **Popular Items** | Top 6 ranked | sorted by `orders` field |
+| **Recent Orders Table** | Last 8 orders | id, customer, items, total, type, status, time |
+| **Status Donut Chart** | 5-segment SVG | placed / confirmed / ready / delivered / cancelled |
 
 **Key Functions**: `renderDashboard()`, `renderRevenueChart()`, `renderPopularItems()`, `renderRecentOrders()`, `renderStatusChart()`
 
-### 3.2 Menu Management
+### 4.2 Menu Management
 
-**Purpose**: Full CRUD for all menu items.
+**Purpose**: Full CRUD for all menu items across outlets.
 
 | Feature | Implementation |
 |---------|---------------|
-| **View** | Grid of colored cards (7 per row on desktop) |
-| **Category Filters** | Pills: All Items (23), Pizzas, Sides, Japanese, Beverages, Desserts, Combos |
+| **View** | Grid of colored cards |
+| **Category Filters** | Pills: All (23), Pizzas, Sides, Japanese, Beverages, Desserts, Combos |
 | **Search** | Real-time text filter by item name |
-| **Add Item** | Modal with: name (char counter), description (char counter), price, category dropdown, icon selector, veg/non-veg radio, color picker (10 swatches), image upload zone |
-| **Image Upload** | Drag & drop zone, click to browse, simulated progress bar (0-100%), FileReader preview |
-| **Pizza Options** | Conditional section (shown when category=pizza): size variants, topping add-ons |
-| **Edit Item** | Same modal, pre-populated with existing data |
+| **Add Item** | Modal: name, description, price, category, icon, veg/non-veg, color picker (10 swatches), image upload |
+| **Image Upload** | Drag & drop zone, click to browse, progress bar, FileReader preview |
+| **Pizza Options** | Conditional: size variants, topping add-ons (shown when category = pizza) |
+| **Edit Item** | Same modal, pre-populated |
 | **Soft Delete** | Confirmation modal showing order count impact → sets `active: false` |
-| **Card Display** | Gradient header (item color), Material icon, veg badge, name, description, price, category label |
+| **Card Display** | Gradient header, Material icon, veg badge, name, price, category label |
 | **Card Actions** | Edit (primary), View (outline), Delete (danger icon) |
 
-**Key Functions**: `renderAdminMenu()`, `filterMenu(cat)`, `searchMenuItems()`, `openAddItemModal()`, `openEditItemModal(id)`, `saveMenuItem()`, `openDeleteModal(id)`, `confirmDeleteItem()`, `handleImageUpload(input)`, `selectColor(el)`, `togglePizzaOptions()`
+**Key Functions**: `renderAdminMenu()`, `filterMenu(cat)`, `searchMenuItems()`, `openAddItemModal()`, `openEditItemModal(id)`, `saveMenuItem()`, `openDeleteModal(id)`, `confirmDeleteItem()`, `handleImageUpload(input)`, `togglePizzaOptions()`
 
-### 3.3 Orders
+### 4.3 Orders
 
-**Purpose**: Complete order management with status tracking.
+**Purpose**: Complete order management with status tracking, GST invoicing, and type-aware actions.
 
 | Feature | Implementation |
 |---------|---------------|
-| **Table Columns** | Checkbox, Order ID, Customer (name + phone), Items, Total, Payment, Status, Date/Time, Actions |
-| **Status Filters** | Pills: All, New (`placed`), Confirmed, Ready, Collected (`delivered`), Cancelled |
+| **Table Columns** | Order ID, Customer (name + phone), Items, Total, Order Type, Payment, Status, Date/Time, Actions |
+| **Status Filters** | Pills: All, New (`placed`), Confirmed, Ready, Collected/Delivered, Cancelled |
 | **Search** | By Order ID or customer name |
-| **Date Filter** | Date picker input |
-| **Bulk Selection** | Master checkbox toggles all |
-| **Order Detail Modal** | Two-column layout: Left (Order info + Customer info), Right (Items list + delivery + total + timeline) |
-| **Timeline** | 4 stages: Order Placed → Confirmed → Ready for Pickup → Collected |
-| **Print Invoice** | Simulated reprint action |
-| **Order ID Format** | `PIZ-YYYYMMDD-NNNN` (e.g., PIZ-20260228-0100) |
+| **Date Filter** | Date picker |
+| **Order Type Badge** | 🍽️ Dine-in (orange), 🛍️ Pickup (teal), 🚚 Delivery (blue) |
+| **Payment Badge** | 💵 Cash at Store (dine-in/pickup), 📱 UPI to Agent (delivery), 💳 Razorpay (online) |
+| **Order Detail Modal** | Two-column: order info + timeline (Left), items + GST breakdown + total (Right) |
+| **Timeline** | Adapts per type: Placed → Confirmed → Ready for Pickup/Dine-in/Out for Delivery → Collected/Confirmed/Delivered |
+| **GST in Detail** | Shows CGST 1.25% + SGST 1.25% on subtotal |
+| **Reprint Invoice** | Generates GST-compliant invoice (GSTIN, CGST, SGST, grand total) |
+| **Order ID Format** | `PIZ-YYYYMMDD-NNNN` |
+| **Admin Actions** | "Mark Ready for Pickup" / "Mark Ready for Dine-in" / "Mark Out for Delivery" (context-aware) |
+| **Outlet Filter** | Filter orders by outlet |
+| **Table Number** | Shown for QR dine-in orders |
 
-**Key Functions**: `renderOrdersTable()`, `filterOrders(status)`, `searchOrders()`, `openOrderDetail(orderId)`, `closeOrderDetail()`, `reprintInvoice()`
+**Key Functions**: `renderOrdersTable()`, `filterOrders(status)`, `searchOrders()`, `openOrderDetail(orderId)`, `closeOrderDetail()`, `reprintInvoice(orderId)`, `updateOrderStatus(orderId, status)`
 
-### 3.4 Customers
+**Order Status Flow (Admin Actions)**:
+
+```mermaid
+graph LR
+    P["placed<br/>(New)"] -->|Accept order| C["confirmed"]
+    C -->|Food prepared| R["ready"]
+    R -->|Pickup| CO["collected"]
+    R -->|Dine-in| DI["dineInConfirmed"]
+    R -->|Delivery| OD["outForDelivery"]
+    OD -->|Delivered| D["delivered"]
+    P & C -->|Cancel| X["cancelled"]
+```
+
+### 4.4 Customers
 
 **Purpose**: Customer directory with spending analytics.
 
@@ -209,51 +281,42 @@ graph TB
 | Name | Avatar initials + full name |
 | Phone | Indian mobile format |
 | Orders | Total order count |
-| Spent | Total ₹ spent (formatted) |
+| Spent | Total ₹ spent |
 | Last Order | Relative date |
-| Status | Active/Inactive badge |
+| Status | Active / Inactive badge |
 
-**Actions**: CSV export button
-
+**Actions**: CSV export.  
 **Key Functions**: `renderCustomers()`, `exportCustomers()`
 
-### 3.5 Promotions & Offers
-
-**Purpose**: Coupon and offer management.
+### 4.5 Promotions & Offers
 
 | Promo | Code | Description | Valid Till |
 |-------|------|-------------|-----------|
 | BOGO Pizza Saturday | `PIZZABOGO` | Buy 1 Get 1 Free on medium pizzas | 2026-03-31 |
 | New User Welcome | `WELCOME30` | Flat 30% off first order | 2026-12-31 |
-| Combo Special | `COMBO100` | ₹100 off on combos above ₹599 | 2026-04-15 |
+| Combo Special | `COMBO100` | ₹100 off combos above ₹599 | 2026-04-15 |
 | Free Delivery Week | `FREEDELIVERY` | Free delivery on all orders | 2026-03-07 |
-
-**Display**: Gradient banner cards with emoji icons, code badge, validity label.
 
 **Key Functions**: `renderPromos()`, `openPromoModal()`
 
-### 3.6 Media Library
-
-**Purpose**: Centralized asset management for menu images and banners.
+### 4.6 Media Library
 
 | Folder | Files | Examples |
 |--------|-------|---------|
-| `pizza` | 5 | margherita.jpg, pepperoni.jpg, sushi_roll.jpg |
-| `toppings` | 3 | extra_cheese.png, mushrooms.png, jalapenos.png |
-| `banners` | 3 | summer_banner.jpg, bogo_offer.jpg, combo_banner.jpg |
+| `pizza` | 5 | margherita.jpg, pepperoni.jpg |
+| `toppings` | 3 | extra_cheese.png, mushrooms.png |
+| `banners` | 3 | summer_banner.jpg, bogo_offer.jpg |
 | `seasonal` | 1 | diwali_special.jpg |
-
-**Features**: Folder-based filtering pills, media cards with gradient thumbnail + file info, upload button.
 
 **Key Functions**: `renderMedia(filter)`, `filterMedia(f)`, `openMediaUpload()`
 
-### 3.7 Reports & Analytics
+### 4.7 Reports & Analytics
 
-**Purpose**: Comprehensive sales reporting across 6 time periods.
+**Purpose**: Comprehensive sales reporting with GST-inclusive totals across 6 time periods.
 
 | Period | Chart Labels | Table Columns |
 |--------|-------------|---------------|
-| **Daily** | 8AM–7PM (hourly) | Hour, Orders, Revenue, Avg. Value, Top Item |
+| **Daily** | 8AM–7PM (hourly) | Hour, Orders, Revenue (incl. GST), Avg. Value, Top Item |
 | **Weekly** | Mon–Sun | Day, Orders, Revenue, Avg. Value, Growth |
 | **Monthly** | Week 1–4 | Week, Orders, Revenue, Avg. Value, Top Category |
 | **Quarterly** | Jan–Mar | Month, Orders, Revenue, Growth, Top Item |
@@ -261,15 +324,16 @@ graph TB
 | **Annual** | Apr–Mar (12 months) | Month, Orders, Revenue, Growth, Highlight |
 
 **Components per period**:
-- 4 KPI cards (Revenue, Orders, Avg. Order, Growth metric)
+- 4 KPI cards (Revenue, Orders, Avg. Order, Growth)
 - Bar chart with value labels
 - Detailed breakdown table
-- Top 5 performers list (ranked with gold/silver/bronze)
+- Top 5 performers (gold/silver/bronze ranked)
+- **GST Summary** (CGST collected + SGST collected per period)
 - PDF + CSV export buttons
 
 **Key Functions**: `switchReport(period)`, `getReportData(period)`, `exportReport(format)`
 
-### 3.8 Inventory
+### 4.8 Inventory
 
 **Purpose**: Stock tracking and reorder management.
 
@@ -286,15 +350,10 @@ graph TB
 | Ramen Noodles | Noodles | 90 | packs | In Stock |
 | Coffee Beans | Beverage | 30 | kg | Moderate |
 
-**Stock Level Thresholds**: High (>50) = green bar, Medium (16-50) = blue bar, Low (≤15) = red bar
-
-**Features**: Progress bar visualization, color-coded status badges, restock action buttons, low-stock alerts button (badge: 3 items)
-
+**Thresholds**: High (>50) = green, Medium (16–50) = blue, Low (≤15) = red.  
 **Key Functions**: `renderInventory()`, `showLowStock()`, `openRestockModal()`
 
-### 3.9 Staff Management
-
-**Purpose**: Team directory and role management.
+### 4.9 Staff Management
 
 | Name | Role | Contact | Avatar Color |
 |------|------|---------|-------------|
@@ -305,26 +364,26 @@ graph TB
 | Vikram Singh | Chef | vikram@frescoz.com | `#EF4444` |
 | Sneha Patel | Chef | sneha@frescoz.com | `#8B5CF6` |
 
-**Display**: Card grid with colored avatar (initials), role badge, contact, Edit + Schedule buttons.
-
 **Key Functions**: `renderStaff()`, `openStaffModal()`
 
-### 3.10 Settings
-
-**Purpose**: Restaurant configuration.
+### 4.10 Settings
 
 | Section | Fields |
 |---------|--------|
 | Store Info | Name, address, phone, email, logo |
+| Outlets | Add/edit/deactivate outlets; QR code generator per outlet/table |
 | Delivery Config | Default time (25-30 min), delivery charge (₹30), free delivery threshold (₹500) |
-| Payment Methods | COD enabled, UPI toggle, payment gateway config |
-| Operating Hours | Monday–Sunday open/close times |
+| Payment Methods | Cash at Store, UPI to Agent, Razorpay (enable/disable per outlet) |
+| GST Config | GSTIN, CGST rate (1.25%), SGST rate (1.25%) |
+| Order Types | Dine-in, Self Pickup, Delivery — toggle per outlet |
+| Address Requirement | Delivery address only for Delivery orders; hidden for Dine-in and Pickup |
+| Operating Hours | Per outlet: Monday–Sunday open/close times |
 
 ---
 
-## 4. Design System
+## 5. Design System
 
-### 4.1 Color Palette
+### 5.1 Color Palette
 
 | Token | Value | Usage |
 |-------|-------|-------|
@@ -342,9 +401,9 @@ graph TB
 | `--success` | `#10B981` | Active, delivered, in-stock |
 | `--warning` | `#F59E0B` | Moderate, preparing |
 | `--error` | `#EF4444` | Cancelled, low-stock, delete |
-| `--info` | `#3B82F6` | New orders, info badges |
+| `--info` | `#3B82F6` | New orders, info badges, Razorpay |
 
-### 4.2 Typography
+### 5.2 Typography
 
 | Style | Weight | Size | Usage |
 |-------|--------|------|-------|
@@ -355,299 +414,277 @@ graph TB
 | Small | 400 | 12px | Labels, hints, badges |
 | Label | 600 | 12px | Button text, pills |
 
-### 4.3 Components
+### 5.3 Components
 
 | Component | Spec |
 |-----------|------|
-| **Cards** | 12px radius, 1px #E5E7EB border, subtle box-shadow |
+| **Cards** | 12px radius, 1px `#E5E7EB` border, subtle box-shadow |
 | **Pills/Chips** | 20px radius, filled active (primary bg), outline inactive |
-| **Status Badges** | Dot + label, color-coded per status |
-| **Buttons (primary)** | Primary bg, white text, 8px radius, hover darken |
+| **Status Badges** | Colored dot + label, per-status color coding |
+| **Order Type Badges** | 🍽️ orange (dine-in), 🛍️ teal (pickup), 🚚 blue (delivery) |
+| **Payment Badges** | 💵 Cash, 📱 UPI, 💳 Razorpay (blue) |
+| **Buttons (primary)** | Primary bg, white text, 8px radius |
 | **Buttons (outline)** | 1px border, text color, transparent bg |
-| **Buttons (danger)** | Red bg/border, icon only or with text |
+| **Buttons (danger)** | Red bg/border |
 | **Modals** | Centered, backdrop overlay, max-width 720px, slide-in animation |
 | **Toast** | Fixed bottom-right, icon + message, 3s auto-dismiss |
-| **Tables** | Header bg #F9FAFB, hover row highlight, zebra optional |
+| **Tables** | Header bg `#F9FAFB`, hover row highlight |
 | **Charts** | CSS bar charts with gradient fills, value labels on top |
-| **Donut Chart** | SVG circles with stroke-dasharray, center text |
+| **Donut Chart** | SVG `stroke-dasharray`, center text |
 
 ---
 
-## 5. Data Models & Sample Data
+## 6. Data Models & Sample Data
 
-### 5.1 Admin Menu Item (Extended)
+### 6.1 Admin Menu Item
 
 ```javascript
-// Fields beyond the customer MenuItem
 {
-  active: true,      // Soft-delete flag (false = deactivated)
-  orders: 156,       // Total orders for this item
-  revenue: 31044,    // Total revenue from this item
+  id: 'pizza-1',
+  name: 'Margherita Pizza',
+  description: 'Classic hand-tossed...',
+  price: 199,
+  category: 'Pizza',
+  icon: 'local_pizza',
+  isVeg: true,
+  active: true,          // Soft-delete flag
+  orders: 156,           // Total orders for this item
+  revenue: 31044,        // Total revenue from this item
+  outletIds: ['main-campus', 'north-block']  // Where item is available
 }
 ```
 
-### 5.2 Admin Order
+### 6.2 Admin Order
 
 ```javascript
 {
-  id: 'PIZ-20260228-0100',
+  id: 'PIZ-20260306-0100',
   customer: 'Rahul S.',
   phone: '+91 98765 43210',
-  items: [{name: 'Family Feast', qty: 1, price: 1499}],
-  total: 1529,              // items total + ₹30 delivery
-  status: 'placed',         // placed|confirmed|ready|delivered|cancelled
-  payment: 'Cash on Delivery', // or 'UPI'
-  address: 'Hostel A, Room 204',
-  date: Date,
-  timeline: [{status: 'placed', time: Date}, {status: 'confirmed', time: Date}]
+  outlet: 'main-campus',
+  tableNumber: 7,            // Set if QR dine-in order
+  items: [{ name: 'Margherita Pizza', qty: 2, price: 199 }],
+  subtotal: 398,
+  deliveryCharge: 0,
+  cgst: 5,                   // subtotal × 1.25%
+  sgst: 5,                   // subtotal × 1.25%
+  discount: 0,
+  total: 408,
+  status: 'placed',          // placed|confirmed|ready|collected|dineInConfirmed|outForDelivery|delivered|cancelled
+  orderType: 'dinein',       // 'dinein' | 'pickup' | 'delivery'
+  payment: 'Cash at Store',  // 'Cash at Store' | 'UPI to Delivery Agent' | 'Razorpay'
+  razorpayPaymentId: null,   // Populated for Razorpay orders
+  address: null,             // Only for delivery orders
+  date: new Date(),
+  timeline: [
+    { status: 'placed', time: new Date() },
+    { status: 'confirmed', time: new Date() }
+  ]
 }
 ```
 
-### 5.3 Customer Record
+### 6.3 Customer Record
 
 ```javascript
 {
   name: 'Rahul S.',
   phone: '+91 98765 43210',
-  orders: 12,           // Total order count
-  spent: 4800,          // Total ₹ spent
-  lastOrder: Date,      // Last order timestamp
-  status: 'active'      // active|inactive
+  orders: 12,
+  spent: 4800,
+  lastOrder: new Date(),
+  status: 'active'
 }
 ```
 
-### 5.4 Inventory Item
+### 6.4 Outlet
 
 ```javascript
 {
-  name: 'Mozzarella Cheese',
-  cat: 'Dairy',
-  stock: 85,
-  unit: 'kg',
-  lastRestock: '2026-02-25'
+  id: 'main-campus',
+  name: "Fresco's — Main Campus",
+  address: 'Ground Floor, Main Building',
+  gstin: '29AABCF1234C1Z5',
+  tables: 20,            // For QR table mapping
+  isActive: true,
+  paymentMethods: ['cash', 'upi', 'razorpay'],
+  orderTypes: ['dinein', 'pickup', 'delivery']
 }
 ```
 
-### 5.5 Staff Member
+### 6.5 Payment Transaction
 
 ```javascript
 {
-  name: 'Sanni Kumar',
-  role: 'Super Admin',
-  contact: 'sanni@frescoz.com',
-  color: '#FF6B35'      // Avatar background color
+  id: 'txn-001',
+  orderId: 'PIZ-20260306-0100',
+  method: 'razorpay',        // 'cash_at_store' | 'upi_to_agent' | 'razorpay'
+  status: 'completed',       // 'pending' | 'completed' | 'failed' | 'refunded'
+  amount: 408,
+  cgst: 5,
+  sgst: 5,
+  razorpayOrderId: 'order_xxx',
+  razorpayPaymentId: 'pay_xxx',
+  razorpaySignature: 'sig_xxx',
+  createdAt: new Date()
 }
 ```
 
 ---
 
-## 6. Backend API
+## 7. Backend API
 
-### 6.1 Admin Authentication
+### 7.1 Admin Order Endpoints
 
-All admin endpoints require `Authorization: Bearer <admin_jwt>` with role = `admin`.
+| Method | Endpoint | Description | Role |
+|--------|----------|-------------|------|
+| GET | `/api/admin/orders` | List all orders (filter by outlet, status, date) | staff+ |
+| GET | `/api/admin/orders/:id` | Order detail with GST breakdown | staff+ |
+| PUT | `/api/admin/orders/:id/status` | Update order status | kitchen+ |
+| GET | `/api/admin/orders/:id/invoice` | Download GST invoice PDF | staff+ |
+| POST | `/api/admin/orders/:id/reprint` | Reprint invoice | staff+ |
 
-### 6.2 Menu Management API
+### 7.2 Admin Menu Endpoints
 
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| `GET` | `/admin/menu/items` | All items (including inactive) |
-| `POST` | `/admin/menu/items` | Create new item |
-| `PUT` | `/admin/menu/items/:id` | Update item |
-| `DELETE` | `/admin/menu/items/:id` | Soft-delete (set is_deleted=true) |
-| `POST` | `/admin/menu/items/:id/restore` | Restore soft-deleted item |
-| `POST` | `/admin/menu/items/:id/image` | Upload item image |
-| `GET` | `/admin/menu/categories` | List all categories |
-| `POST` | `/admin/menu/categories` | Create category |
-| `PUT` | `/admin/menu/categories/:id` | Update category |
+| Method | Endpoint | Description | Role |
+|--------|----------|-------------|------|
+| GET | `/api/admin/menu` | All items including inactive | staff+ |
+| POST | `/api/admin/menu` | Create menu item | admin+ |
+| PUT | `/api/admin/menu/:id` | Update menu item | admin+ |
+| DELETE | `/api/admin/menu/:id` | Soft delete item | admin+ |
+| POST | `/api/admin/menu/:id/image` | Upload item image | admin+ |
 
-**Create/Update Item Request:**
-```json
-{
-  "name": "Margherita Pizza",
-  "description": "Classic hand-tossed pizza...",
-  "price": 199,
-  "category": "pizza",
-  "icon": "local_pizza",
-  "color": "#E53935",
-  "is_veg": true,
-  "is_available": true,
-  "size_options": [
-    {"label": "Small (7\")", "size_code": "small", "price_addon": 0},
-    {"label": "Medium (10\")", "size_code": "medium", "price_addon": 50},
-    {"label": "Large (13\")", "size_code": "large", "price_addon": 100}
-  ],
-  "topping_options": [
-    {"name": "Extra Cheese", "price": 40, "is_veg": true, "category": "cheese"}
-  ]
-}
-```
+### 7.3 Reporting Endpoints
 
-### 6.3 Order Management API
+| Method | Endpoint | Description | Role |
+|--------|----------|-------------|------|
+| GET | `/api/admin/reports/daily` | Hourly breakdown, GST summary | admin+ |
+| GET | `/api/admin/reports/weekly` | Daily breakdown | admin+ |
+| GET | `/api/admin/reports/monthly` | Weekly breakdown | admin+ |
+| GET | `/api/admin/reports/quarterly` | Monthly breakdown | admin+ |
+| GET | `/api/admin/reports/half-yearly` | 6-month breakdown | admin+ |
+| GET | `/api/admin/reports/annual` | 12-month breakdown | admin+ |
+| GET | `/api/admin/reports/gst` | GST summary (CGST + SGST collected) | admin+ |
+| GET | `/api/admin/reports/export` | Export PDF / CSV | admin+ |
 
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| `GET` | `/admin/orders` | All orders (with filters) |
-| `GET` | `/admin/orders/:id` | Full order detail |
-| `PUT` | `/admin/orders/:id/status` | Update status |
-| `GET` | `/admin/orders/stats` | Order statistics |
+### 7.4 Outlet & QR Endpoints
 
-**Query Parameters**: `?status=placed&search=PIZ-2026&date=2026-03-01&page=1&limit=20`
-
-**Update Status:**
-```json
-{
-  "status": "confirmed",
-  "notes": "Order verified and sent to kitchen"
-}
-```
-
-### 6.4 Customer Management API
-
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| `GET` | `/admin/customers` | All customers with stats |
-| `GET` | `/admin/customers/:id` | Detail + order history |
-| `PUT` | `/admin/customers/:id` | Update status |
-| `GET` | `/admin/customers/export` | CSV export |
-
-### 6.5 Analytics API
-
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| `GET` | `/admin/analytics/dashboard` | 4 KPI values |
-| `GET` | `/admin/analytics/revenue?period=weekly` | Revenue trend data |
-| `GET` | `/admin/analytics/popular-items?limit=6` | Top items |
-| `GET` | `/admin/analytics/reports/:period` | Full report data |
-| `GET` | `/admin/analytics/reports/:period/export?format=pdf` | Export report |
-
-**Period values**: `daily`, `weekly`, `monthly`, `quarterly`, `halfyearly`, `annual`
-
-**Response: Dashboard KPIs**
-```json
-{
-  "revenue": {"value": 48520, "change_pct": 12.5, "trend": "up"},
-  "orders": {"value": 127, "change_pct": 8.3, "trend": "up"},
-  "customers": {"value": 342, "change_pct": 3.1, "trend": "up"},
-  "avg_order": {"value": 382, "change_pct": -2.1, "trend": "down"}
-}
-```
-
-### 6.6 Promotion API
-
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| `GET` | `/admin/promotions` | All promos |
-| `POST` | `/admin/promotions` | Create promo |
-| `PUT` | `/admin/promotions/:id` | Update promo |
-| `DELETE` | `/admin/promotions/:id` | Deactivate |
-
-### 6.7 Media Library API
-
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| `GET` | `/admin/media` | List media files |
-| `GET` | `/admin/media?folder=pizza` | Filter by folder |
-| `POST` | `/admin/media/upload` | Upload file(s) — multipart |
-| `DELETE` | `/admin/media/:id` | Delete file |
-| `GET` | `/admin/media/folders` | List folders |
-
-### 6.8 Inventory API
-
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| `GET` | `/admin/inventory` | All items with stock |
-| `PUT` | `/admin/inventory/:id` | Update stock |
-| `POST` | `/admin/inventory/:id/restock` | Record restock |
-| `GET` | `/admin/inventory/low-stock` | Items below threshold |
-
-### 6.9 Staff API
-
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| `GET` | `/admin/staff` | All staff members |
-| `POST` | `/admin/staff` | Add staff |
-| `PUT` | `/admin/staff/:id` | Update role/details |
-| `DELETE` | `/admin/staff/:id` | Remove staff |
+| Method | Endpoint | Description | Role |
+|--------|----------|-------------|------|
+| GET | `/api/admin/outlets` | List outlets | staff+ |
+| POST | `/api/admin/outlets` | Create outlet | super_admin |
+| PUT | `/api/admin/outlets/:id` | Update outlet config | admin+ |
+| GET | `/api/admin/outlets/:id/qr/:table` | Get QR code for table | admin+ |
+| POST | `/api/admin/outlets/:id/qr/generate` | Generate all table QRs | admin+ |
 
 ---
 
-## 7. Database Schema
+## 8. Authentication & RBAC
 
-### 7.1 Admin-Specific Tables
+### 8.1 Staff Login Flow
+
+```mermaid
+sequenceDiagram
+    Staff->>AdminPortal: Enter phone number
+    AdminPortal->>API: POST /api/auth/otp/request
+    API->>Twilio: Send OTP via SMS
+    Twilio-->>Staff: SMS with OTP
+    Staff->>AdminPortal: Enter OTP
+    AdminPortal->>API: POST /api/auth/otp/verify
+    API-->>AdminPortal: JWT { access_token, refresh_token, role }
+    AdminPortal->>AdminPortal: Route to appropriate module based on role
+```
+
+### 8.2 Token Strategy
+
+| Token | Lifetime | Purpose |
+|-------|---------|---------|
+| **Access Token** | 15–30 min | API authentication |
+| **Refresh Token** | 30 days | Auto-renew access token |
+| **Token Blacklist** | On logout | Prevent reuse (stored in Redis) |
+
+### 8.3 Role-Based Module Access
+
+| Module | customer | cashier | kitchen | delivery | admin | super_admin |
+|--------|----------|---------|---------|----------|-------|-------------|
+| Dashboard | ❌ | ✅ | ❌ | ❌ | ✅ | ✅ |
+| Menu Management | ❌ | 👁️ | 👁️ | ❌ | ✅ | ✅ |
+| Orders | ❌ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Customers | ❌ | ❌ | ❌ | ❌ | ✅ | ✅ |
+| Promotions | ❌ | ❌ | ❌ | ❌ | ✅ | ✅ |
+| Reports | ❌ | ❌ | ❌ | ❌ | ✅ | ✅ |
+| Inventory | ❌ | ❌ | ✅ | ❌ | ✅ | ✅ |
+| Staff Management | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ |
+| Settings | ❌ | ❌ | ❌ | ❌ | ✅ | ✅ |
+| GST Invoice | ❌ | ✅ | ❌ | ❌ | ✅ | ✅ |
+
+*👁️ = read-only*
+
+---
+
+## 9. Database Schema
+
+### 9.1 Admin-Specific Tables
 
 ```mermaid
 erDiagram
-    MENU_ITEMS ||--o{ MENU_ITEM_IMAGES : has
-    STAFF ||--o{ ORDERS : manages
-    INVENTORY_ITEMS ||--o{ INVENTORY_LOGS : tracks
-    PROMOTIONS ||--o{ PROMO_USAGE : used_in
-
-    MENU_ITEM_IMAGES {
+    OUTLETS {
         uuid id PK
-        uuid menu_item_id FK
-        varchar url
-        varchar folder
-        int file_size_bytes
-        varchar content_type
-        boolean is_primary
-        timestamp uploaded_at
+        varchar slug UK
+        varchar name
+        varchar address
+        varchar gstin
+        int table_count
+        boolean is_active
+        jsonb payment_methods
+        jsonb order_types
     }
 
     STAFF {
-        uuid user_id PK
-        varchar role "super_admin|kitchen_manager|chef|cashier|delivery"
-        varchar contact
-        varchar color
-        varchar shift
-        boolean is_on_duty
-        timestamp hired_at
-    }
-
-    INVENTORY_ITEMS {
         uuid id PK
+        varchar phone UK
         varchar name
-        varchar category
-        decimal stock_quantity
-        varchar unit
-        decimal min_stock_level
-        timestamp last_restocked_at
-    }
-
-    INVENTORY_LOGS {
-        uuid id PK
-        uuid item_id FK
-        enum action "restock|consumed|adjusted"
-        decimal quantity_change
-        uuid changed_by FK
-        timestamp created_at
-    }
-
-    PROMOTIONS {
-        uuid id PK
-        varchar code UK
-        varchar title
-        text description
-        enum type "percentage|flat|bogo|free_delivery"
-        decimal value
-        decimal min_order_value
-        decimal max_discount
-        varchar bg_gradient
-        varchar emoji
-        int usage_limit
-        int used_count
-        timestamp valid_from
-        timestamp valid_till
+        varchar email
+        enum role "cashier|kitchen|delivery|admin|super_admin"
+        varchar avatar_color
+        uuid outlet_id FK
         boolean is_active
     }
 
-    PROMO_USAGE {
+    ORDERS {
         uuid id PK
-        uuid promo_id FK
-        uuid user_id FK
+        varchar order_number UK
+        uuid customer_id FK
+        uuid outlet_id FK
+        int table_number
+        enum status
+        enum order_type "pickup|dinein|delivery"
+        enum payment_method "cash_at_store|upi_to_agent|razorpay"
+        varchar delivery_address
+        decimal subtotal
+        decimal delivery_charge
+        decimal cgst
+        decimal sgst
+        decimal discount
+        decimal total
+        boolean is_paid
+        varchar razorpay_order_id
+        varchar razorpay_payment_id
+        timestamp created_at
+        timestamp completed_at
+    }
+
+    PAYMENT_TRANSACTIONS {
+        uuid id PK
         uuid order_id FK
-        decimal discount_amount
-        timestamp used_at
+        enum method "cash_at_store|upi_to_agent|razorpay"
+        enum status "pending|completed|failed|refunded"
+        decimal amount
+        decimal cgst_amount
+        decimal sgst_amount
+        varchar razorpay_order_id
+        varchar razorpay_payment_id
+        varchar razorpay_signature
+        timestamp created_at
     }
 
     ORDER_STATUS_HISTORY {
@@ -659,306 +696,172 @@ erDiagram
         timestamp changed_at
     }
 
-    PAYMENT_TRANSACTIONS {
+    PROMO_CODES {
         uuid id PK
-        uuid order_id FK
-        enum method "upi|cod"
-        enum status "pending|completed|failed|refunded"
-        decimal amount
-        varchar transaction_id
-        timestamp created_at
+        varchar code UK
+        varchar description
+        enum type "percentage|fixed|free_delivery|bogo"
+        decimal value
+        decimal min_order
+        date valid_till
+        boolean is_active
+        int usage_count
+        int usage_limit
     }
+
+    INVENTORY_ITEMS {
+        uuid id PK
+        uuid outlet_id FK
+        varchar name
+        varchar category
+        decimal stock
+        varchar unit
+        decimal low_stock_threshold
+        date last_restock
+    }
+
+    OUTLETS ||--o{ ORDERS : "receives"
+    OUTLETS ||--o{ STAFF : "employs"
+    OUTLETS ||--o{ INVENTORY_ITEMS : "tracks"
+    ORDERS ||--o| PAYMENT_TRANSACTIONS : "has"
+    ORDERS ||--o{ ORDER_STATUS_HISTORY : "has"
 ```
 
-### 7.2 Analytics Views
+### 9.2 Analytics Views (Materialized)
 
 ```sql
--- Materialized view for dashboard KPIs
-CREATE MATERIALIZED VIEW daily_analytics AS
+-- GST collection summary by outlet and period
+CREATE MATERIALIZED VIEW mv_gst_summary AS
 SELECT
-    DATE(created_at) as date,
-    COUNT(*) as order_count,
-    SUM(total) as revenue,
-    AVG(total) as avg_order_value,
-    COUNT(DISTINCT customer_id) as unique_customers
-FROM orders
-WHERE status = 'delivered'
-GROUP BY DATE(created_at);
+  o.outlet_id,
+  DATE_TRUNC('month', o.created_at) AS period,
+  SUM(o.subtotal) AS taxable_amount,
+  SUM(o.cgst) AS cgst_collected,
+  SUM(o.sgst) AS sgst_collected,
+  SUM(o.total) AS gross_revenue,
+  COUNT(*) AS order_count
+FROM orders o
+WHERE o.status NOT IN ('cancelled')
+GROUP BY o.outlet_id, DATE_TRUNC('month', o.created_at);
 
--- Refresh every 15 minutes
-REFRESH MATERIALIZED VIEW CONCURRENTLY daily_analytics;
-
--- Popular items view
-CREATE MATERIALIZED VIEW popular_items AS
-SELECT
-    mi.id, mi.name, mi.category, mi.icon, mi.color,
-    COUNT(oi.id) as order_count,
-    SUM(oi.line_total) as total_revenue
-FROM menu_items mi
-JOIN order_items oi ON mi.id = oi.menu_item_id
-JOIN orders o ON oi.order_id = o.id AND o.status = 'delivered'
-GROUP BY mi.id, mi.name, mi.category, mi.icon, mi.color
-ORDER BY order_count DESC;
+-- Refresh schedule: every hour
+-- SELECT cron.schedule('refresh-gst', '0 * * * *', 'REFRESH MATERIALIZED VIEW CONCURRENTLY mv_gst_summary');
 ```
 
 ---
 
-## 8. State Management
+## 10. Real-Time Order Management
 
-### 8.1 Admin Providers (Flutter Web)
+### 10.1 WebSocket Events (Admin)
 
-```dart
-MultiProvider(providers: [
-  ChangeNotifierProvider(create: (_) => AdminAuthProvider()),
-  ChangeNotifierProvider(create: (_) => AdminMenuProvider()),
-  ChangeNotifierProvider(create: (_) => AdminOrderProvider()),
-  ChangeNotifierProvider(create: (_) => CustomerListProvider()),
-  ChangeNotifierProvider(create: (_) => AnalyticsProvider()),
-  ChangeNotifierProvider(create: (_) => PromotionProvider()),
-  ChangeNotifierProvider(create: (_) => MediaLibraryProvider()),
-  ChangeNotifierProvider(create: (_) => InventoryProvider()),
-  ChangeNotifierProvider(create: (_) => StaffProvider()),
-])
-```
+| Event | Direction | Payload |
+|-------|-----------|---------|
+| `order.new` | Server → Admin | `{ order }` — triggers sound + badge +1 |
+| `order.status_changed` | Server → Admin | `{ orderId, oldStatus, newStatus }` |
+| `order.payment_received` | Server → Admin | `{ orderId, method, amount }` |
+| `admin.status_update` | Admin → Server | `{ orderId, newStatus, adminId }` |
+| `inventory.low_stock` | Server → Admin | `{ itemId, currentStock }` |
 
-### 8.2 Provider Specifications
+### 10.2 Order Notification Sound
 
-```dart
-class AdminMenuProvider extends ChangeNotifier {
-  List<AdminMenuItem> _items = [];
-  String _categoryFilter = 'all';
-  String _searchQuery = '';
-
-  Future<void> fetchItems();
-  Future<void> createItem(AdminMenuItem item);
-  Future<void> updateItem(String id, AdminMenuItem item);
-  Future<void> softDeleteItem(String id);
-  Future<void> restoreItem(String id);
-  Future<String> uploadImage(File image);
-  List<AdminMenuItem> get filteredItems;
-}
-
-class AdminOrderProvider extends ChangeNotifier {
-  List<AdminOrder> _orders = [];
-  String _statusFilter = 'all';
-  String _searchQuery = '';
-
-  Future<void> fetchOrders();
-  Future<void> updateStatus(String id, String status);
-  AdminOrder? getOrderById(String id);
-  Map<String, int> get statusCounts;
-}
-
-class AnalyticsProvider extends ChangeNotifier {
-  DashboardKPIs? _kpis;
-  ReportData? _currentReport;
-
-  Future<void> fetchDashboard();
-  Future<void> fetchReport(String period);
-  Future<void> exportReport(String period, String format);
-}
-```
+New orders trigger an audible notification in the admin portal (Web Audio API `AudioContext`).
 
 ---
 
-## 9. Real-Time Order Management
+## 11. Reports & Analytics Engine
 
-### 9.1 Admin WebSocket Events
-
-| Event | Direction | Payload | Admin Action |
-|-------|-----------|---------|-------------|
-| `order:new` | Server → Admin | Full order object | Show notification badge, add to table |
-| `order:status_changed` | Server → Admin | `{order_id, status, by}` | Update table row |
-| `kitchen:queue` | Server → Admin | `{queue_length, avg_wait}` | Update dashboard |
-
-### 9.2 Order Status Workflow
+### 11.1 Report Data Flow
 
 ```mermaid
-stateDiagram-v2
-    [*] --> Placed: Customer places order
-    Placed --> Confirmed: Admin confirms
-    Confirmed --> Preparing: Kitchen starts
-    Preparing --> Ready: Food ready
-    Ready --> Delivered: Customer collects (slide-to-accept)
-    Placed --> Cancelled: Admin/Customer cancels
-    Confirmed --> Cancelled: Admin cancels
-
-    note right of Placed: WhatsApp sent
-    note right of Confirmed: Push notification
-    note right of Ready: Push + WhatsApp
-    note right of Delivered: Order complete
+graph LR
+    ORDERS_TABLE["ORDERS table"] --> MAT_VIEWS["Materialized Views<br/>(hourly refresh)"]
+    MAT_VIEWS --> ANALYTICS_SVC["Analytics Service"]
+    ANALYTICS_SVC --> API["REST API /reports/*"]
+    API --> ADMIN_PORTAL["Admin Portal Charts"]
+    ADMIN_PORTAL --> EXPORT["PDF / CSV Export"]
 ```
 
-### 9.3 Admin Order Card Actions
+### 11.2 GST Report
 
-From `admin_screen.dart` — the existing Flutter admin provides:
+Every reporting period includes a **GST Summary card**:
 
-| Current Status | Action Button | Next Status |
-|----------------|--------------|-------------|
-| Placed | "Confirm Order" | Confirmed |
-| Confirmed | "Start Preparing" | Preparing |
-| Preparing | "Mark Ready" | Ready |
-| Ready | "Mark Delivered" | Delivered |
-| Any (not completed) | "Cancel" (outline red) | Cancelled |
-
----
-
-## 10. Reports & Analytics Engine
-
-### 10.1 Report Data Structure
-
-```javascript
-// Each period returns this shape
-{
-  kpis: [
-    {label: 'Revenue', value: '₹48,520', change: '↑ 12.5%', trend: 'up'},
-    {label: 'Orders', value: '127', change: '↑ 8.3%', trend: 'up'},
-    ...
-  ],
-  chartTitle: 'Hourly Breakdown — Today',
-  chartLabels: ['8AM', '9AM', ...],
-  chartValues: [1200, 3400, ...],
-  tableTitle: 'Hourly Details',
-  tableCols: ['Hour', 'Orders', 'Revenue', 'Avg. Value', 'Top Item'],
-  tableRows: [['8-9 AM', '3', '₹1,200', '₹400', 'Margherita'], ...]
-}
-```
-
-### 10.2 Report KPI Summary
-
-| Period | Revenue | Orders | Avg. Order | Highlight |
-|--------|---------|--------|-----------|-----------|
-| Daily | ₹48,520 | 127 | ₹382 | New Customers: 18 |
-| Weekly | ₹2,84,720 | 756 | ₹377 | New Customers: 89 |
-| Monthly | ₹8,38,000 | 2,197 | ₹381 | Customer Growth: +342 |
-| Quarterly | ₹24,68,000 | 6,467 | ₹382 | Retention Rate: 78% |
-| Half-Yearly | ₹43,58,000 | 11,422 | ₹381 | Active Customers: 1,245 |
-| Annual | ₹71,48,000 | 18,720 | ₹382 | Total Customers: 2,890 |
-
-### 10.3 Export Formats
-
-| Format | Content | Library |
-|--------|---------|---------|
-| **PDF** | Formatted report with charts, tables, KPIs | pdfmake / jsPDF |
-| **CSV** | Raw data tables, one sheet per section | Native CSV generation |
+| Field | Value |
+|-------|-------|
+| Taxable Turnover | ₹ subtotal total |
+| CGST Collected (1.25%) | ₹ CGST total |
+| SGST Collected (1.25%) | ₹ SGST total |
+| Total Tax Collected | ₹ GST total |
+| Gross Revenue | ₹ grand total |
 
 ---
 
-## 11. Security & RBAC
+## 12. Security & Infrastructure
 
-### 11.1 Role-Based Access Control
+### 12.1 Security Measures
 
-| Resource | Customer | Staff | Kitchen Mgr | Admin |
-|----------|----------|-------|-------------|-------|
-| Dashboard | ❌ | ❌ | ✅ read | ✅ |
-| Menu (read) | ✅ | ✅ | ✅ | ✅ |
-| Menu (write) | ❌ | ❌ | ❌ | ✅ |
-| All Orders | ❌ | ✅ assigned | ✅ | ✅ |
-| Update Order Status | ❌ | ❌ | ✅ | ✅ |
-| Customer Data | Own only | ❌ | ❌ | ✅ |
-| Analytics/Reports | ❌ | ❌ | ❌ | ✅ |
-| Inventory | ❌ | ✅ read | ✅ | ✅ |
-| Staff Mgmt | ❌ | ❌ | ❌ | ✅ |
-| Settings | ❌ | ❌ | ❌ | ✅ |
-| Media Library | ❌ | ❌ | ❌ | ✅ |
-| Promotions | ❌ | ❌ | ❌ | ✅ |
+| Concern | Implementation |
+|---------|---------------|
+| Transport | HTTPS everywhere (TLS 1.2+) |
+| Authentication | JWT (RS256) + OTP via Twilio |
+| OTP storage | Hashed with bcrypt before DB write |
+| OTP rate limiting | Max 3 requests / 15 min per phone |
+| Input validation | Server-side on all endpoints |
+| RBAC | Role claim in JWT, checked every request |
+| Razorpay | Signature verified server-side before order confirmation |
+| DB connections | SSL encrypted |
+| Sensitive ops | Re-authentication required (staff deletion, settings) |
 
-### 11.2 Admin Security Measures
-
-| Layer | Implementation |
-|-------|---------------|
-| Authentication | JWT with role claim = 'admin' |
-| Session timeout | 8 hours for admin portal |
-| Audit logging | All CRUD operations logged with user_id + timestamp |
-| Input validation | Server-side Joi/Zod schemas on all admin endpoints |
-| Image upload | Max 5MB, PNG/JPG/WebP only, virus scan |
-| CORS | Admin portal origin whitelisted |
-| Rate limiting | 200 req/min for admin endpoints |
-| Soft delete | Menu items and promos deactivated, not removed |
-
----
-
-## 12. Deployment & Infrastructure
-
-### 12.1 Admin Portal Deployment
-
-| Environment | Platform | URL |
-|-------------|----------|-----|
-| Development | Local dev server | `localhost:8090/admin.html` |
-| Staging | Vercel / Netlify | `admin-staging.frescoskitchen.com` |
-| Production | CloudFront + S3 | `admin.frescoskitchen.com` |
-
-### 12.2 Infrastructure for Admin
+### 12.2 Infrastructure
 
 ```mermaid
 graph TB
-    CF["CDN (CloudFront)"] --> ALB["Load Balancer"]
-    ALB --> API1["API Server 1"]
-    ALB --> API2["API Server 2"]
-    ALB --> WS["WebSocket Server"]
-    API1 & API2 --> PG["PostgreSQL Primary"]
-    API1 & API2 --> PG_R["PostgreSQL Replica"]
-    API1 & API2 --> REDIS["Redis"]
-    API1 --> S3["S3 (Media)"]
+    INTERNET["Internet / CDN"] --> NGINX["Nginx<br/>(Reverse Proxy + SSL)"]
+    NGINX --> FLUTTER_WEB["Flutter Web Admin"]
+    NGINX --> API["Node.js API<br/>(NestJS)"]
+    API --> PG["PostgreSQL<br/>(Primary + Read Replica)"]
+    API --> REDIS["Redis<br/>(Cache + Sessions)"]
+    API --> S3["S3 / MinIO<br/>(Media + Invoices)"]
+    API --> RAZORPAY["Razorpay API"]
+    API --> TWILIO["Twilio SMS"]
+    API --> FCM["Firebase FCM"]
 ```
 
-### 12.3 Performance Targets
+### 12.3 Deployment Strategy
 
-| Metric | Target |
-|--------|--------|
-| Dashboard load | < 1 second |
-| Table rendering (40 orders) | < 200ms |
-| Report generation | < 2 seconds |
-| Image upload (5MB) | < 5 seconds |
-| WebSocket latency | < 100ms |
+| Stage | Setup |
+|-------|-------|
+| **v1 (Launch)** | Docker Compose (nginx, api, postgres, redis) on single VPS / Cloud VM |
+| **v2 (Growth)** | Managed DB (RDS/Cloud SQL), Redis (Elasticache), API on ECS / Cloud Run |
+| **v3 (Scale)** | Add DB read replicas, CDN for media, horizontal API scaling, Microservices if needed |
+
+### 12.4 CI/CD Pipeline
+
+```
+Push to main → GitHub Actions:
+  1. Run tests
+  2. Build Docker image
+  3. Push to ECR / Artifact Registry
+  4. Deploy to ECS / Cloud Run
+  5. Run DB migrations
+  6. Refresh materialized views
+  7. Send Slack notification
+```
 
 ---
 
 ## 13. Implementation Roadmap
 
-### Phase 1 — Core Admin (Weeks 1-3)
-
-| Task | Priority |
-|------|----------|
-| Convert admin.html prototype to Flutter Web | 🔴 Critical |
-| Admin auth + JWT with role checks | 🔴 Critical |
-| Menu CRUD API + image upload to S3 | 🔴 Critical |
-| AdminMenuProvider + AdminOrderProvider | 🔴 Critical |
-| Dashboard with live KPIs | 🟡 High |
-
-### Phase 2 — Orders & Real-time (Weeks 4-5)
-
-| Task | Priority |
-|------|----------|
-| Order management table + status updates | 🔴 Critical |
-| WebSocket for live order notifications | 🔴 Critical |
-| Order detail modal with timeline | 🟡 High |
-| Customer management module | 🟡 High |
-| WhatsApp notification on status change | 🟡 High |
-
-### Phase 3 — Analytics & Content (Weeks 6-8)
-
-| Task | Priority |
-|------|----------|
-| Reports engine (6 periods) | 🟡 High |
-| PDF/CSV export | 🟢 Medium |
-| Media library with S3 integration | 🟢 Medium |
-| Promotions CRUD | 🟢 Medium |
-| Inventory management | 🟢 Medium |
-| Staff management | 🟢 Medium |
-
-### Phase 4 — Polish (Weeks 9-10)
-
-| Task | Priority |
-|------|----------|
-| Responsive design (tablet + desktop) | 🟡 High |
-| Settings module | 🟢 Medium |
-| Audit logging | 🟡 High |
-| Security audit | 🔴 Critical |
-| Performance optimization | 🟡 High |
-
----
-
-> **Prototype Reference**: [prototype/admin.html](../prototype/admin.html) — Live at `http://localhost:8090/admin.html`  
-> **Flutter Admin**: [lib/screens/admin/admin_screen.dart](../lib/screens/admin/admin_screen.dart)  
-> **Companion**: [Customer App System Design](./customer_app_system_design.md)
+| Phase | Milestone | Description |
+|-------|-----------|-------------|
+| ✅ **0** | HTML Prototype approved | `admin.html` + `admin.js` + `admin.css` fully functional |
+| 🔄 **1** | Backend — Auth module | Staff OTP login, JWT, RBAC |
+| 🔄 **2** | Backend — Menu & Outlets | CRUD, image uploads, outlet management |
+| 🔄 **3** | Backend — Orders + GST | Status management, CGST/SGST calculation, invoice generation |
+| 🔄 **4** | Backend — Payments | Razorpay integration, transaction records |
+| 🔄 **5** | Backend — Analytics | Materialized views, 6-period reporting, GST reports |
+| 🔄 **6** | Backend — Inventory & Staff | Stock tracking, staff CRUD, RBAC enforcement |
+| 🔄 **7** | Backend — Notifications | FCM push, WhatsApp alerts, admin order sounds |
+| 🔄 **8** | Flutter Web Admin | Dashboard, Orders, Menu — connected to live API |
+| 🔄 **9** | Flutter Web Admin | Reports, Inventory, Staff, Settings |
+| 🔄 **10** | QR Code System | Table QR generation (admin) + table QR scanning (customer app) |
+| 🔄 **11** | Production | Docker + AWS/GCP, CI/CD, monitoring, load testing |
