@@ -21,8 +21,9 @@
 12. [WebSocket Events](#12-websocket-events)
 13. [Error Handling](#13-error-handling)
 14. [Security](#14-security)
-15. [Infrastructure & Deployment](#15-infrastructure--deployment)
-16. [Technology Decision Record](#16-technology-decision-record)
+15. [Edge Case Handling Matrix](#15-edge-case-handling-matrix)
+16. [Infrastructure & Deployment](#16-infrastructure--deployment)
+17. [Technology Decision Record](#17-technology-decision-record)
 
 ---
 
@@ -46,13 +47,14 @@
 | Attribute | Value |
 |-----------|-------|
 | **API Style** | REST (primary) + WebSocket (real-time) |
-| **Authentication** | JWT (RS256) + OTP via Twilio |
+| **Authentication** | JWT (RS256) + OTP via MSG91 |
 | **Database** | PostgreSQL 15 (primary) + read replica |
 | **Cache** | Redis 7 |
 | **Payment** | Razorpay |
-| **SMS** | Twilio |
+| **SMS / OTP** | MSG91 (DLT-compliant, India-optimised) |
+| **WhatsApp** | Meta WhatsApp Cloud API (direct, no middleman) |
 | **Push** | Firebase Cloud Messaging (FCM) |
-| **Media** | AWS S3 / MinIO |
+| **Media** | Cloudflare R2 / MinIO |
 | **Base URL** | `https://api.fresco-kitchen.com/api/v1` |
 | **Content-Type** | `application/json` |
 | **Rate Limiting** | Global: 100 req/min per IP |
@@ -98,14 +100,14 @@ flowchart TB
         PG_PRIMARY[("PostgreSQL 15\nPrimary (R/W)")]
         PG_REPLICA[("PostgreSQL 15\nRead Replica")]
         REDIS[("Redis 7\nCache + Pub/Sub")]
-        S3[("S3 / MinIO\nMedia + Reports")]
+        R2[("Cloudflare R2 / MinIO\nMedia + Reports")]
     end
 
     subgraph External
         RAZORPAY["Razorpay"]
-        TWILIO["Twilio SMS"]
+        MSG91["MSG91 SMS/OTP"]
         FCM["Firebase FCM"]
-        WHATSAPP["WhatsApp API"]
+        WHATSAPP["Meta WhatsApp\nCloud API"]
     end
 
     FLUTTER & ADMIN & BROWSER --> NGINX
@@ -115,8 +117,8 @@ flowchart TB
     NEST --> REDIS
     FAST --> PG_REPLICA
     FAST --> REDIS
-    FAST --> S3
-    NEST --> RAZORPAY & TWILIO & FCM & WHATSAPP
+    FAST --> R2
+    NEST --> RAZORPAY & MSG91 & FCM & WHATSAPP
 ```
 
 ### 2.2 Request Lifecycle — Standard (NestJS)
@@ -251,8 +253,8 @@ sequenceDiagram
     User->>API: POST /auth/otp/request { phone }
     API->>API: Generate 6-digit OTP
     API->>API: Hash OTP with bcrypt, store in otp_requests (TTL 10 min)
-    API->>Twilio: Send SMS
-    Twilio-->>User: OTP via SMS
+    API->>MSG91: Send OTP SMS (DLT-registered template)
+    MSG91-->>User: OTP via SMS
     User->>API: POST /auth/otp/verify { phone, otp }
     API->>API: Validate OTP hash, check expiry, check attempts ≤ 5
     API->>API: Upsert user, issue JWT access + refresh tokens
@@ -506,7 +508,7 @@ Format: `{OUTLET_CODE}-{FY}-{SEQUENCE}` · Example: `IITH-FY26-000145` · Sequen
 | **Invoice number** | `next_invoice_number()` DB function — atomic, financial-year-aware |
 | **CGST + SGST split** | Both stored as separate columns in `orders` |
 | **Credit note** | Generated on `refunded` status; references original invoice number |
-| **Downloadable PDF** | Generated server-side (Puppeteer / PDFKit), stored in S3 |
+| **Downloadable PDF** | Generated server-side (Puppeteer / PDFKit), stored in Cloudflare R2 |
 | **Invoice assigned when** | Order transitions to `confirmed` (not at `initiated`) |
 
 ```typescript
@@ -936,7 +938,7 @@ flowchart LR
     CRON["Scheduled Job\n(daily 2 AM)"] --> EXTRACT["Extract order history\nfrom PG read replica"]
     EXTRACT --> TRANSFORM["Build user-item matrix\n(pandas)"]
     TRANSFORM --> TRAIN["Train NearestNeighbors\n(scikit-learn)"]
-    TRAIN --> SERIALIZE["Serialize model\n(joblib → S3)"]
+    TRAIN --> SERIALIZE["Serialize model\n(joblib → Persistent Disk)"]
     SERIALIZE --> RELOAD["FastAPI hot-reload\nmodel on next request"]
 ```
 
@@ -1105,18 +1107,20 @@ Signed with the app's private key. The customer app verifies the signature befor
 
 ## 11. Module 9 — Notifications
 
-> **Primary channel: WhatsApp.** Works for QR guest users (no app needed). FCM is secondary for app users.
+> **Primary channel: WhatsApp** (via Meta Cloud API). Works for QR guest users (no app needed). FCM is secondary for app users. OTP SMS sent via **MSG91**.
 
 ### 11.1 Notification Engine
 
-| Feature | Implementation |
-|---------|---------------|
-| **WhatsApp order confirmation** | Primary channel — sent on `confirmed` for ALL orders including QR guests |
-| **Status updates** | WhatsApp + FCM at key milestones: confirmed, ready, delivered |
-| **Retry logic** | 3 attempts with exponential backoff (1s → 5s → 15s) |
-| **Dead-letter queue** | Failed after 3 attempts → written to `notification_dlq` table for manual review |
-| **Delivery receipts** | WhatsApp webhook tracks delivered/read status |
-| **Broadcast** | Admin can send promo/system messages to customer segments |
+| Feature | Provider | Implementation |
+|---------|----------|---------------|
+| **OTP SMS** | MSG91 | DLT-registered template, auto-retry with OTP widget, ₹0.14–0.22/SMS |
+| **WhatsApp order confirmation** | Meta WhatsApp Cloud API | Primary channel — sent on `confirmed` for ALL orders including QR guests |
+| **Status updates** | Meta WhatsApp Cloud API + FCM | WhatsApp at key milestones: confirmed, ready, delivered |
+| **Retry logic** | Both | 3 attempts with exponential backoff (1s → 5s → 15s) |
+| **Dead-letter queue** | Both | Failed after 3 attempts → written to `notification_dlq` table for manual review |
+| **Delivery receipts** | Meta WhatsApp Cloud API | Webhook tracks delivered/read status |
+| **Broadcast** | Meta WhatsApp Cloud API | Admin can send promo/system messages to customer segments |
+| **Free tier** | Meta WhatsApp Cloud API | 1,000 free service conversations/month |
 
 ### 11.2 Notification Architecture
 
@@ -1124,8 +1128,8 @@ Signed with the app's private key. The customer app verifies the signature befor
 sequenceDiagram
     OrderService->>NotificationQueue: Enqueue { event, orderId, channel, recipient }
     NotificationQueue->>NotificationWorker: Dequeue message
-    NotificationWorker->>WhatsAppAPI: Send message
-    WhatsAppAPI-->>NotificationWorker: { status: delivered | failed }
+    NotificationWorker->>MetaCloudAPI: Send WhatsApp message
+    MetaCloudAPI-->>NotificationWorker: { status: delivered | failed }
     alt Delivered
         NotificationWorker->>DB: notifications.is_delivered = true
     else Failed (attempt < 3)
@@ -1256,7 +1260,7 @@ CREATE TABLE notification_dlq (
 
 | Concern | Implementation |
 |---------|---------------|
-| **Transport** | HTTPS everywhere (TLS 1.2+) |
+| **Transport** | HTTPS mandatory everywhere (TLS 1.2+) |
 | **JWT Algorithm** | RS256 (asymmetric: private key signs, public key verifies) |
 | **OTP hashing** | bcrypt (12 rounds) before DB storage |
 | **OTP rate limiting** | 3 requests / 15 min per phone (Redis counter) |
@@ -1266,17 +1270,133 @@ CREATE TABLE notification_dlq (
 | **RBAC** | JWT `role` claim checked via `RolesGuard` on every endpoint |
 | **Input validation** | NestJS `ValidationPipe` with `class-validator` DTOs |
 | **SQL injection** | TypeORM parameterized queries (no raw SQL with user input) |
+| **PostgreSQL RLS** | Row-Level Security policies enforce tenant isolation — customers can only read their own orders, staff scoped to their outlet |
+| **Encrypted PII** | Phone numbers, addresses, and WhatsApp numbers encrypted at rest using AES-256-GCM; decrypted only in-memory at query time |
 | **Razorpay security** | HMAC-SHA256 signature verified server-side |
 | **DB connections** | SSL/TLS encrypted PostgreSQL connection |
 | **Secrets management** | Environment variables, never committed to git |
 | **CORS** | Whitelist allowed origins (`app.fresco-kitchen.com`, localhost) |
 | **Helmet** | HTTP security headers (HSTS, XSS protection, etc.) |
+| **WAF** | Cloudflare WAF (production) / ModSecurity (self-hosted) — SQL injection, XSS, bot protection, geo-blocking |
+| **Rate limiting** | Global: 100 req/min per IP; OTP: 3/15 min per phone; sensitive endpoints: 10 req/min |
+| **Audit logs** | Immutable append-only `audit_logs` table — records all status transitions, payment events, admin actions with actor, IP, timestamp, and before/after snapshots |
+
+### 14.1 PostgreSQL Row-Level Security
+
+```sql
+-- Customers can only see their own orders
+ALTER TABLE orders ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY orders_customer_policy ON orders
+    FOR SELECT
+    USING (customer_id = current_setting('app.current_user_id')::UUID);
+
+-- Staff can only see orders for their assigned outlet
+CREATE POLICY orders_staff_policy ON orders
+    FOR ALL
+    USING (outlet_id IN (
+        SELECT outlet_id FROM staff_assignments
+        WHERE user_id = current_setting('app.current_user_id')::UUID
+    ));
+
+-- Admin/super_admin can see everything (bypass RLS)
+CREATE POLICY orders_admin_policy ON orders
+    FOR ALL
+    USING (current_setting('app.current_user_role') IN ('admin', 'super_admin'));
+```
+
+### 14.2 PII Encryption
+
+```typescript
+// shared/utils/encryption.ts
+import { createCipheriv, createDecipheriv, randomBytes } from 'crypto';
+
+const ALGORITHM = 'aes-256-gcm';
+const KEY = Buffer.from(process.env.PII_ENCRYPTION_KEY, 'hex'); // 32 bytes
+
+export function encryptPII(plaintext: string): string {
+  const iv = randomBytes(12);
+  const cipher = createCipheriv(ALGORITHM, KEY, iv);
+  const encrypted = Buffer.concat([cipher.update(plaintext, 'utf8'), cipher.final()]);
+  const tag = cipher.getAuthTag();
+  // Format: iv:tag:ciphertext (all base64)
+  return `${iv.toString('base64')}:${tag.toString('base64')}:${encrypted.toString('base64')}`;
+}
+
+export function decryptPII(encoded: string): string {
+  const [ivB64, tagB64, dataB64] = encoded.split(':');
+  const decipher = createDecipheriv(ALGORITHM, KEY, Buffer.from(ivB64, 'base64'));
+  decipher.setAuthTag(Buffer.from(tagB64, 'base64'));
+  return decipher.update(Buffer.from(dataB64, 'base64')) + decipher.final('utf8');
+}
+```
+
+### 14.3 Audit Log Schema
+
+```sql
+CREATE TABLE audit_logs (
+    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    actor_id        UUID,                           -- User who performed the action
+    actor_role      VARCHAR(20) NOT NULL,
+    action          VARCHAR(50) NOT NULL,           -- 'order.status_change', 'payment.refund', etc.
+    entity_type     VARCHAR(30) NOT NULL,           -- 'order', 'payment', 'menu_item'
+    entity_id       UUID NOT NULL,
+    before_state    JSONB,                          -- Snapshot before change
+    after_state     JSONB,                          -- Snapshot after change
+    ip_address      INET,
+    user_agent      TEXT,
+    metadata        JSONB,                          -- Additional context
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- Immutable: no UPDATE or DELETE allowed
+REVOKE UPDATE, DELETE ON audit_logs FROM app_user;
+
+-- Index for fast lookups
+CREATE INDEX idx_audit_entity ON audit_logs (entity_type, entity_id, created_at DESC);
+CREATE INDEX idx_audit_actor ON audit_logs (actor_id, created_at DESC);
+```
 
 ---
 
-## 15. Infrastructure & Deployment
+## 15. Edge Case Handling Matrix
 
-### 15.1 Docker Compose (v1 — Launch)
+### 15.1 Payment Edge Cases
+
+| Scenario | Handling | Error Code | Recovery |
+|----------|----------|-----------|----------|
+| **Webhook delayed** | Order remains `PAYMENT_PENDING` until webhook arrives or 15-min TTL expires. Customer sees "Processing Payment..." | — | Cron job expires after 15 min; customer can retry |
+| **Duplicate webhook** | Idempotency check — `razorpay_payment_id` is unique-indexed on `payment_transactions` table. Second processing is a no-op | `PAYMENT_ALREADY_CAPTURED` | Safe to re-process; returns existing order status |
+| **Double payment** | Detected via idempotency key + Razorpay order-to-payment mapping. If excess amount captured, flag for admin review and initiate automatic partial refund | `REFUND_EXCEEDS_AMOUNT` | Auto-refund excess via Razorpay Refund API; alert admin |
+| **Gateway timeout** | Customer sees "Awaiting confirmation" screen with auto-polling (`GET /orders/:id` every 5s). Frontend does **not** update payment status — only webhook does | — | Webhook will arrive eventually; 15-min TTL is safety net |
+| **DB failure after payment** | Webhook handler wraps all DB writes in an atomic transaction. If transaction fails, Razorpay retries webhook (up to 24 hours). Handler is idempotent | — | Razorpay automatic webhook retry; manual reconciliation via nightly cron |
+| **Razorpay down** | Order stays `INITIATED`. Customer shown "Payment service temporarily unavailable" with option to pay via Cash/UPI at counter | `PAYMENT_GATEWAY_UNAVAILABLE` | Fallback to cash payment; retry Razorpay later |
+
+### 15.2 Order Edge Cases
+
+| Scenario | Handling | Error Code | Recovery |
+|----------|----------|-----------|----------|
+| **Item unavailable** (after cart) | Revalidate all item availability at `POST /orders` time (before payment). If any item is unavailable, reject entire order with specific item details | `ITEM_UNAVAILABLE` | Customer removes item and resubmits; real-time availability via WebSocket |
+| **Cart refresh / stale prices** | Server recalculates all prices at order submission time using current DB prices. Client-side totals are for display only — never trusted | — | Price mismatch logged; customer shown updated total before payment |
+| **Staff cancels paid order** | Atomic transition `CONFIRMED` → `CANCELLED`. Auto-initiates full Razorpay refund. Credit note generated. WhatsApp notification sent to customer | `ORDER_NOT_CANCELLABLE` (if past `PREPARING`) | Refund via Razorpay; credit note for GST reconciliation |
+| **Student dispute** | Order flagged for manual admin review. Admin can view full audit trail (order history, payment status, status transitions). Resolution options: refund, re-prepare, or reject | — | Admin portal dispute resolution workflow; audit log provides evidence |
+| **Outlet closes mid-order** | Orders in `INITIATED`/`PAYMENT_PENDING` are auto-expired. Orders already `CONFIRMED` or beyond continue to completion. New orders rejected with `OUTLET_CLOSED` | `OUTLET_CLOSED` | Admin toggles outlet status; existing orders honored |
+| **Concurrent status updates** | Optimistic locking via `version` column on `orders` table. If two staff members try to advance status simultaneously, one gets `409 Conflict` | `CONCURRENT_MODIFICATION` | Retry with fresh state; UI auto-refreshes via WebSocket |
+
+### 15.3 Notification Edge Cases
+
+| Scenario | Handling |
+|----------|----------|
+| **WhatsApp delivery failure** | 3 retries with exponential backoff → dead-letter queue → admin notification |
+| **Invalid phone number** | MSG91 returns error → order proceeds without OTP (guest flow falls back to name-only) |
+| **FCM token expired** | Token refresh on next app open; missed push notifications visible in in-app notification feed |
+| **Bulk broadcast failure** | Batch processing with per-message error tracking; partial success allowed; failed messages retry |
+
+---
+
+## 16. Infrastructure & Deployment
+
+### 16.1 Docker Compose (v1 — Launch)
 
 ```yaml
 version: '3.9'
@@ -1292,9 +1412,12 @@ services:
       ANALYTICS_SERVICE_URL: http://analytics:8000  # Internal service discovery
       RAZORPAY_KEY_ID: rzp_live_xxx
       RAZORPAY_KEY_SECRET: xxx
-      TWILIO_ACCOUNT_SID: ACxxx
-      TWILIO_AUTH_TOKEN: xxx
-      TWILIO_PHONE: +1555xxx
+      MSG91_AUTH_KEY: xxx
+      MSG91_SENDER_ID: FRESCO
+      MSG91_OTP_TEMPLATE_ID: xxx
+      WHATSAPP_PHONE_NUMBER_ID: xxx
+      WHATSAPP_ACCESS_TOKEN: xxx
+      WHATSAPP_BUSINESS_ACCOUNT_ID: xxx
     depends_on: [db, cache, analytics]
 
   # ── FastAPI Analytics Microservice ──────────────
@@ -1304,7 +1427,7 @@ services:
     environment:
       DATABASE_URL: postgres://readonly:secret@db:5432/frescos?sslmode=disable
       REDIS_URL: redis://cache:6379
-      S3_BUCKET: frescos-reports
+      R2_BUCKET: frescos-reports
       ML_MODEL_PATH: /app/ml/models
       ALLOWED_GATEWAY_HOSTS: api  # Only accept requests from NestJS container
     depends_on: [db, cache]
@@ -1336,22 +1459,22 @@ volumes:
   ml_models:     # Persisted ML model artifacts
 ```
 
-### 15.2 Production (v2)
+### 16.2 Production (v2)
 
 | Component | Service |
 |-----------|---------|
-| NestJS Gateway | AWS ECS (Fargate) or Google Cloud Run |
-| FastAPI Analytics | AWS ECS (Fargate) — same cluster, internal ALB | 
-| Database (Primary) | AWS RDS PostgreSQL (Multi-AZ) |
-| Database (Read Replica) | AWS RDS Read Replica (analytics-service connects here) |
-| Cache | AWS ElastiCache for Redis |
-| Media + Reports | AWS S3 + CloudFront CDN |
-| ML Models | AWS S3 (model artifacts) → mounted in ECS task |
-| Secrets | AWS Secrets Manager |
-| Monitoring | Datadog or AWS CloudWatch |
-| CI/CD | GitHub Actions → ECR → ECS deploy (both services) |
+| NestJS Gateway | Render Web Service |
+| FastAPI Analytics | Render Private Service (internal network) | 
+| Database (Primary) | Render PostgreSQL |
+| Database (Read Replica) | Render PostgreSQL Read Replica |
+| Cache | Render Redis |
+| Media + Reports | Cloudflare R2 + CDN |
+| ML Models | Render Persistent Disk (mounted volume) |
+| Secrets | Render Environment Variables / Secret Files |
+| Monitoring | Datadog (via Render Log Streams) |
+| CI/CD | GitHub Actions → Render Deploy Hook or Auto-Deploy |
 
-### 15.3 Environment Variables — NestJS Gateway
+### 16.3 Environment Variables — NestJS Gateway
 
 ```bash
 # Server
@@ -1377,24 +1500,32 @@ JWT_REFRESH_EXPIRES=30d
 RAZORPAY_KEY_ID=rzp_live_xxx
 RAZORPAY_KEY_SECRET=xxx
 
-# Twilio
-TWILIO_ACCOUNT_SID=ACxxx
-TWILIO_AUTH_TOKEN=xxx
-TWILIO_PHONE_NUMBER=+1555xxx
+# MSG91 (SMS / OTP)
+MSG91_AUTH_KEY=xxx
+MSG91_SENDER_ID=FRESCO                  # 6-char DLT-registered sender ID
+MSG91_OTP_TEMPLATE_ID=xxx               # DLT-approved OTP template
+MSG91_OTP_LENGTH=6
+MSG91_OTP_EXPIRY=600                    # 10 minutes (seconds)
+
+# Meta WhatsApp Cloud API
+WHATSAPP_PHONE_NUMBER_ID=xxx            # From Meta Business Manager
+WHATSAPP_ACCESS_TOKEN=xxx               # System user token (permanent)
+WHATSAPP_BUSINESS_ACCOUNT_ID=xxx        # WABA ID
+WHATSAPP_VERIFY_TOKEN=xxx               # Webhook verification token
+WHATSAPP_API_VERSION=v21.0
 
 # Firebase
 FIREBASE_PROJECT_ID=frescos-kitchen
 FIREBASE_PRIVATE_KEY=-----BEGIN PRIVATE KEY-----...
 
-# WhatsApp
-WHATSAPP_PHONE=+91XXXXXXXXXX
-
-# AWS
-AWS_S3_BUCKET=frescos-media
-AWS_REGION=ap-south-1
+# Cloudflare R2 (Object Storage)
+R2_BUCKET_NAME=frescos-media
+R2_ACCOUNT_ID=xxx
+R2_ACCESS_KEY_ID=xxx
+R2_SECRET_ACCESS_KEY=xxx
 ```
 
-### 15.4 Environment Variables — FastAPI Analytics Service
+### 16.4 Environment Variables — FastAPI Analytics Service
 
 ```bash
 # Server
@@ -1412,9 +1543,11 @@ REDIS_URL=redis://:password@host:6379
 ML_MODEL_PATH=/app/ml/models
 ML_RETRAIN_CRON="0 2 * * *"     # Daily at 2 AM IST
 
-# Report Storage
-S3_BUCKET=frescos-reports
-AWS_REGION=ap-south-1
+# Report Storage (Cloudflare R2)
+R2_BUCKET_NAME=frescos-reports
+R2_ACCOUNT_ID=xxx
+R2_ACCESS_KEY_ID=xxx
+R2_SECRET_ACCESS_KEY=xxx
 
 # Security
 ALLOWED_GATEWAY_HOSTS=api,10.0.0.0/16   # Accept only from internal network
@@ -1422,7 +1555,7 @@ ALLOWED_GATEWAY_HOSTS=api,10.0.0.0/16   # Accept only from internal network
 
 ---
 
-## 16. Technology Decision Record
+## 17. Technology Decision Record
 
 ### TDR-001: Hybrid Architecture — NestJS Gateway + FastAPI Analytics
 
@@ -1449,7 +1582,7 @@ A single runtime cannot optimally serve both.
 #### Rationale — Why NestJS for the Gateway
 
 1. **WebSocket-first** — 7+ real-time event types (order status, kitchen alerts, low-stock). Node.js event-loop + Socket.IO handles 10K+ idle connections efficiently.
-2. **SDK ecosystem** — Razorpay, Firebase Admin, Twilio all have first-class Node.js SDKs.
+2. **SDK ecosystem** — Razorpay, Firebase Admin, MSG91, and Meta WhatsApp Cloud API all have first-class Node.js SDKs.
 3. **NestJS structure** — Guards, Interceptors, Decorators, modular DI — enterprise-grade without boilerplate.
 4. **TypeScript safety** — Compile-time type checking is critical for payment-processing code paths.
 
