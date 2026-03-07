@@ -46,7 +46,7 @@ The Fresco's Kitchen Admin Portal is a **web-based administration system** provi
 | Data | Count | Details |
 |------|-------|---------|
 | Menu Items | **23** | Pizza (4), Japanese (5), Sides (3), Beverages (4), Desserts (4), Combo (3) |
-| Orders | **40** | 5 statuses: placed, confirmed, ready, delivered, cancelled · 3 order types: dine-in, pickup, delivery |
+| Orders | **40** | 5 statuses: placed, confirmed, ready, delivered, cancelled |
 | Customers | **15** | Names, phones, order counts, total spent |
 | Inventory | **10** | Across 8 categories with stock levels |
 | Staff | **6** | Super Admin, Kitchen Manager, Delivery Manager, Cashier, 2 Chefs |
@@ -188,17 +188,15 @@ graph TB
 
 | Feature | Implementation |
 |---------|---------------|
-| **Table Columns** | Checkbox, Order ID, Customer (name + phone), Items, Total, Order Type, Payment, Status, Date/Time, Actions |
-| **Status Filters** | Pills: All, New (`placed`), Confirmed, Ready, Collected/Delivered (`delivered`), Cancelled |
+| **Table Columns** | Checkbox, Order ID, Customer (name + phone), Items, Total, Payment, Status, Date/Time, Actions |
+| **Status Filters** | Pills: All, New (`placed`), Confirmed, Ready, Collected (`delivered`), Cancelled |
 | **Search** | By Order ID or customer name |
 | **Date Filter** | Date picker input |
 | **Bulk Selection** | Master checkbox toggles all |
-| **Order Detail Modal** | Two-column layout: Left (Order info + Customer info), Right (Items list + order type + payment + total + timeline) |
-| **Timeline** | Adapts per order type: Order Placed → Confirmed → Ready for Pickup/Dine-in/Out for Delivery → Collected/Confirmed/Delivered |
+| **Order Detail Modal** | Two-column layout: Left (Order info + Customer info), Right (Items list + delivery + total + timeline) |
+| **Timeline** | 4 stages: Order Placed → Confirmed → Ready for Pickup → Collected |
 | **Print Invoice** | Simulated reprint action |
 | **Order ID Format** | `PIZ-YYYYMMDD-NNNN` (e.g., PIZ-20260228-0100) |
-| **Order Type Badge** | 🍽️ Dine-in (orange), 🛍️ Pickup (teal), 🚚 Delivery (blue) |
-| **Payment Badge** | 💵 Cash at Store (dine-in/pickup), 📱 UPI to Agent (delivery) |
 
 **Key Functions**: `renderOrdersTable()`, `filterOrders(status)`, `searchOrders()`, `openOrderDetail(orderId)`, `closeOrderDetail()`, `reprintInvoice()`
 
@@ -319,9 +317,7 @@ graph TB
 |---------|--------|
 | Store Info | Name, address, phone, email, logo |
 | Delivery Config | Default time (25-30 min), delivery charge (₹30), free delivery threshold (₹500) |
-| Payment Methods | Cash at Store (dine-in/pickup), UPI to Delivery Agent (delivery) |
-| Order Types | Dine-in, Self Pickup, Delivery — toggle availability per type |
-| Address Requirement | Delivery address only required for Delivery orders; hidden for Dine-in and Pickup |
+| Payment Methods | COD enabled, UPI toggle, payment gateway config |
 | Operating Hours | Monday–Sunday open/close times |
 
 ---
@@ -400,9 +396,8 @@ graph TB
   items: [{name: 'Family Feast', qty: 1, price: 1499}],
   total: 1529,              // items total + ₹30 delivery
   status: 'placed',         // placed|confirmed|ready|delivered|cancelled
-  orderType: 'pickup',      // 'dinein' | 'pickup' | 'delivery'
-  payment: 'Cash at Store', // 'Cash at Store' (dinein/pickup) or 'UPI to Delivery Agent' (delivery)
-  address: null,            // Only populated for delivery orders
+  payment: 'Cash on Delivery', // or 'UPI'
+  address: 'Hostel A, Room 204',
   date: Date,
   timeline: [{status: 'placed', time: Date}, {status: 'confirmed', time: Date}]
 }
@@ -667,7 +662,7 @@ erDiagram
     PAYMENT_TRANSACTIONS {
         uuid id PK
         uuid order_id FK
-        enum method "cash_at_store|upi_to_agent"
+        enum method "upi|cod"
         enum status "pending|completed|failed|refunded"
         decimal amount
         varchar transaction_id
@@ -784,23 +779,14 @@ stateDiagram-v2
     Placed --> Confirmed: Admin confirms
     Confirmed --> Preparing: Kitchen starts
     Preparing --> Ready: Food ready
-    Ready --> Collected: Customer collects (Pickup - slide-to-accept)
-    Ready --> DineInConfirmed: Customer confirms (Dine-in - slide-to-accept)
-    Ready --> Delivered: Customer accepts (Delivery - slide-to-accept)
-    Collected --> [*]
-    DineInConfirmed --> [*]
-    Delivered --> [*]
+    Ready --> Delivered: Customer collects (slide-to-accept)
     Placed --> Cancelled: Admin/Customer cancels
     Confirmed --> Cancelled: Admin cancels
 
     note right of Placed: WhatsApp sent
     note right of Confirmed: Push notification
-    note right of Ready
-        Status adapts per order type:
-        Pickup → "Ready for Pickup"
-        Dine-in → "Ready for Dine-in"
-        Delivery → "Out for Delivery"
-    end note
+    note right of Ready: Push + WhatsApp
+    note right of Delivered: Order complete
 ```
 
 ### 9.3 Admin Order Card Actions
@@ -811,8 +797,8 @@ From `admin_screen.dart` — the existing Flutter admin provides:
 |----------------|--------------|-------------|
 | Placed | "Confirm Order" | Confirmed |
 | Confirmed | "Start Preparing" | Preparing |
-| Preparing | "Mark Ready for Pickup" / "Mark Ready for Dine-in" / "Mark Out for Delivery" | Ready |
-| Ready | "Mark Collected" / "Mark Dine-in Confirmed" / "Mark Delivered" | Delivered |
+| Preparing | "Mark Ready" | Ready |
+| Ready | "Mark Delivered" | Delivered |
 | Any (not completed) | "Cancel" (outline red) | Cancelled |
 
 ---
