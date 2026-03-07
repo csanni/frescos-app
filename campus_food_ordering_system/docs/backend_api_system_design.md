@@ -409,6 +409,7 @@ sequenceDiagram
 Order status follows a **10-state strict machine**. All transitions are **atomic** — executed in a DB transaction with optimistic locking. Frontend payment signals are **not trusted**; only the Razorpay webhook updates payment states.
 
 ```mermaid
+
 stateDiagram-v2
     [*] --> INITIATED : Customer submits order
     INITIATED --> PAYMENT_PENDING : Razorpay session opened
@@ -430,6 +431,7 @@ stateDiagram-v2
         Only HMAC-SHA256 webhook
         from Razorpay is trusted.
     end note
+    
 ```
 
 **Allowed transitions table:**
