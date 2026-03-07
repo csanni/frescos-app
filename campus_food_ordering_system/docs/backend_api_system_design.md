@@ -409,19 +409,18 @@ sequenceDiagram
 Order status follows a **10-state strict machine**. All transitions are **atomic** — executed in a DB transaction with optimistic locking. Frontend payment signals are **not trusted**; only the Razorpay webhook updates payment states.
 
 ```mermaid
-
 stateDiagram-v2
     [*] --> INITIATED : Customer submits order
     INITIATED --> PAYMENT_PENDING : Razorpay session opened
-    INITIATED --> CONFIRMED : Cash / UPI at store (no payment gate)
-    INITIATED --> EXPIRED : Cron: 15-min TTL unpaid
-    PAYMENT_PENDING --> PAYMENT_SUCCESS : 🔒 Razorpay webhook (HMAC SHA256 only)
-    PAYMENT_PENDING --> EXPIRED : Cron: 15-min TTL
+    INITIATED --> CONFIRMED : Cash or UPI at store
+    INITIATED --> EXPIRED : Cron - 15 min TTL unpaid
+    PAYMENT_PENDING --> PAYMENT_SUCCESS : Razorpay webhook HMAC SHA256
+    PAYMENT_PENDING --> EXPIRED : Cron - 15 min TTL
     PAYMENT_SUCCESS --> CONFIRMED : Auto-confirm or kitchen accepts
     CONFIRMED --> PREPARING : Kitchen starts cooking
-    CONFIRMED --> CANCELLED : Admin cancels (before PREPARING)
+    CONFIRMED --> CANCELLED : Admin cancels before PREPARING
     PREPARING --> READY
-    READY --> DELIVERED : Customer slide-to-accept / admin
+    READY --> DELIVERED : Customer slide-to-accept or admin
     DELIVERED --> REFUNDED : Admin initiates refund
     CANCELLED --> REFUNDED : If payment was already captured
 
@@ -431,7 +430,7 @@ stateDiagram-v2
         Only HMAC-SHA256 webhook
         from Razorpay is trusted.
     end note
-    
+
 ```
 
 **Allowed transitions table:**
