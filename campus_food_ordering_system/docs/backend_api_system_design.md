@@ -1,6 +1,6 @@
 # Fresco's Kitchen — Backend API System Design
 
-**Version:** 1.0 · **Date:** 6 March 2026 · **Author:** Engineering Team  
+**Version:** 2.0 · **Date:** 7 March 2026 · **Author:** Engineering Team  
 **Companion Documents:** [Database Schema](./database_schema.md) · [Customer App](./customer_app_system_design.md) · [Admin Portal](./admin_portal_system_design.md)
 
 ---
@@ -15,25 +15,39 @@
 6. [Module 4 — Orders](#6-module-4--orders)
 7. [Module 5 — Payments](#7-module-5--payments)
 8. [Module 6 — Inventory](#8-module-6--inventory)
-9. [Module 7 — Analytics & Reporting](#9-module-7--analytics--reporting)
+9. [Module 7 — Analytics, Reporting & ML (FastAPI)](#9-module-7--analytics-reporting--ml-fastapi)
 10. [Module 8 — Admin Operations](#10-module-8--admin-operations)
 11. [Module 9 — Notifications](#11-module-9--notifications)
 12. [WebSocket Events](#12-websocket-events)
 13. [Error Handling](#13-error-handling)
 14. [Security](#14-security)
 15. [Infrastructure & Deployment](#15-infrastructure--deployment)
+16. [Technology Decision Record](#16-technology-decision-record)
 
 ---
 
 ## 1. Overview
 
+> **Hybrid Architecture** — The backend is split into two services: a **NestJS gateway** that owns all customer-facing APIs, WebSockets, and business logic, and a **FastAPI analytics microservice** that owns reporting, ML-powered recommendations, and data exports. Clients always talk to the NestJS gateway; it proxies analytics requests internally.
+
+### 1.1 Service Matrix
+
+| | **API Gateway** | **Analytics Service** |
+|---|---|---|
+| **Runtime** | Node.js 20 LTS | Python 3.12 |
+| **Framework** | NestJS (TypeScript) | FastAPI (Pydantic v2) |
+| **Port** | 3000 | 8000 |
+| **Owns** | Auth, Users, Menu, Orders, Payments, Inventory, Admin, Notifications, WebSocket | Reports, GST Summaries, ML Recommendations, CSV/PDF Exports |
+| **Database access** | Read/Write (TypeORM) | **Read-only replica** (SQLAlchemy 2.0 async) |
+| **Inter-service** | Proxies `/admin/reports/*`, `/recommendations/*` → analytics:8000 | Receives proxied requests from gateway |
+
+### 1.2 Shared Infrastructure
+
 | Attribute | Value |
 |-----------|-------|
-| **Runtime** | Node.js 20 LTS |
-| **Framework** | NestJS (TypeScript) |
 | **API Style** | REST (primary) + WebSocket (real-time) |
 | **Authentication** | JWT (RS256) + OTP via Twilio |
-| **Database** | PostgreSQL 15 (via TypeORM) |
+| **Database** | PostgreSQL 15 (primary) + read replica |
 | **Cache** | Redis 7 |
 | **Payment** | Razorpay |
 | **SMS** | Twilio |
@@ -43,25 +57,69 @@
 | **Content-Type** | `application/json` |
 | **Rate Limiting** | Global: 100 req/min per IP |
 
-### Modules Summary
+### 1.3 Modules Summary
 
-| # | Module | Endpoints | Auth Required |
-|---|--------|-----------|--------------|
-| 1 | Authentication | 5 | Partial |
-| 2 | Users | 6 | ✅ |
-| 3 | Menu & Content | 10 | Partial |
-| 4 | Orders | 9 | ✅ |
-| 5 | Payments | 4 | ✅ |
-| 6 | Inventory | 5 | ✅ (staff+) |
-| 7 | Analytics & Reporting | 8 | ✅ (admin+) |
-| 8 | Admin Operations | 10 | ✅ (admin+) |
-| 9 | Notifications | 4 | ✅ |
+| # | Module | Service | Endpoints | Auth Required |
+|---|--------|---------|-----------|---------------|
+| 1 | Authentication | NestJS Gateway | 5 | Partial |
+| 2 | Users | NestJS Gateway | 6 | ✅ |
+| 3 | Menu & Content | NestJS Gateway | 10 | Partial |
+| 4 | Orders | NestJS Gateway | 9 | ✅ |
+| 5 | Payments | NestJS Gateway | 4 | ✅ |
+| 6 | Inventory | NestJS Gateway | 5 | ✅ (staff+) |
+| 7 | Analytics, Reporting & ML | **FastAPI** | 11 | ✅ (admin+) |
+| 8 | Admin Operations | NestJS Gateway | 10 | ✅ (admin+) |
+| 9 | Notifications | NestJS Gateway | 4 | ✅ |
 
 ---
 
 ## 2. Architecture
 
-### 2.1 Request Lifecycle
+### 2.1 Microservice Topology
+
+```mermaid
+flowchart TB
+    subgraph Clients
+        FLUTTER["Flutter App (Customer)"]
+        ADMIN["Admin Portal (Web)"]
+        BROWSER["QR Browser Order"]
+    end
+
+    subgraph Edge
+        NGINX["Nginx Reverse Proxy\nTLS termination"]
+    end
+
+    subgraph Services
+        NEST["NestJS Gateway :3000\n(TypeScript)\nAuth · Users · Menu · Orders\nPayments · Inventory · Admin\nNotifications · WebSocket"]
+        FAST["FastAPI Analytics :8000\n(Python 3.12)\nReports · GST · ML Recs\nCSV/PDF Export"]
+    end
+
+    subgraph Data
+        PG_PRIMARY[("PostgreSQL 15\nPrimary (R/W)")]
+        PG_REPLICA[("PostgreSQL 15\nRead Replica")]
+        REDIS[("Redis 7\nCache + Pub/Sub")]
+        S3[("S3 / MinIO\nMedia + Reports")]
+    end
+
+    subgraph External
+        RAZORPAY["Razorpay"]
+        TWILIO["Twilio SMS"]
+        FCM["Firebase FCM"]
+        WHATSAPP["WhatsApp API"]
+    end
+
+    FLUTTER & ADMIN & BROWSER --> NGINX
+    NGINX --> NEST
+    NEST -- "internal HTTP\n/admin/reports/*\n/recommendations/*" --> FAST
+    NEST --> PG_PRIMARY
+    NEST --> REDIS
+    FAST --> PG_REPLICA
+    FAST --> REDIS
+    FAST --> S3
+    NEST --> RAZORPAY & TWILIO & FCM & WHATSAPP
+```
+
+### 2.2 Request Lifecycle — Standard (NestJS)
 
 ```mermaid
 sequenceDiagram
@@ -77,33 +135,88 @@ sequenceDiagram
     NestJS-->>Client: JSON Response
 ```
 
-### 2.2 NestJS Module Structure
+### 2.3 Request Lifecycle — Analytics (FastAPI via Gateway Proxy)
+
+```mermaid
+sequenceDiagram
+    Admin Portal->>Nginx: GET /api/v1/admin/reports/daily
+    Nginx->>NestJS: Proxy pass
+    NestJS->>Guard: JWT validation + RBAC (admin+ only)
+    Guard-->>NestJS: Authorized ✅
+    NestJS->>FastAPI: Internal proxy → http://analytics:8000/reports/daily
+    Note right of NestJS: Forwards JWT payload as X-User-Id,<br/>X-User-Role headers
+    FastAPI->>PG Replica: Async SQLAlchemy query
+    PG Replica-->>FastAPI: Result
+    FastAPI->>Redis: Cache result (TTL 5 min)
+    FastAPI-->>NestJS: JSON response
+    NestJS-->>Admin Portal: Wrapped in standard envelope
+```
+
+### 2.4 NestJS Gateway — Module Structure
 
 ```
-src/
-├── main.ts                    # Bootstrap, Swagger, CORS, global pipes
-├── app.module.ts              # Root module
-├── modules/
-│   ├── auth/                  # Module 1
-│   ├── users/                 # Module 2
-│   ├── menu/                  # Module 3
-│   ├── orders/                # Module 4
-│   ├── payments/              # Module 5
-│   ├── inventory/             # Module 6
-│   ├── analytics/             # Module 7
-│   ├── admin/                 # Module 8
-│   └── notifications/         # Module 9
-├── shared/
-│   ├── guards/                # JwtAuthGuard, RolesGuard
-│   ├── decorators/            # @Roles(), @CurrentUser()
-│   ├── interceptors/          # LoggingInterceptor, TransformInterceptor
-│   ├── filters/               # GlobalExceptionFilter
-│   └── utils/                 # GSTCalculator, OrderNumberGenerator
-└── config/
-    ├── database.config.ts
-    ├── redis.config.ts
-    ├── jwt.config.ts
-    └── razorpay.config.ts
+backend/
+├── src/
+│   ├── main.ts                    # Bootstrap, Swagger, CORS, global pipes
+│   ├── app.module.ts              # Root module
+│   ├── modules/
+│   │   ├── auth/                  # Module 1
+│   │   ├── users/                 # Module 2
+│   │   ├── menu/                  # Module 3
+│   │   ├── orders/                # Module 4
+│   │   ├── payments/              # Module 5
+│   │   ├── inventory/             # Module 6
+│   │   ├── analytics-proxy/       # Module 7 — Proxy to FastAPI (no business logic)
+│   │   ├── admin/                 # Module 8
+│   │   └── notifications/         # Module 9
+│   ├── shared/
+│   │   ├── guards/                # JwtAuthGuard, RolesGuard
+│   │   ├── decorators/            # @Roles(), @CurrentUser()
+│   │   ├── interceptors/          # LoggingInterceptor, TransformInterceptor
+│   │   ├── filters/               # GlobalExceptionFilter
+│   │   └── utils/                 # GSTCalculator, OrderNumberGenerator
+│   └── config/
+│       ├── database.config.ts
+│       ├── redis.config.ts
+│       ├── jwt.config.ts
+│       └── razorpay.config.ts
+```
+
+### 2.5 FastAPI Analytics Service — Project Structure
+
+```
+analytics-service/
+├── app/
+│   ├── main.py                    # FastAPI app, lifespan, middleware
+│   ├── config.py                  # Pydantic Settings (env vars)
+│   ├── database.py                # AsyncEngine + sessionmaker (read-only replica)
+│   ├── dependencies.py            # get_db, get_redis, verify_internal_auth
+│   ├── routers/
+│   │   ├── reports.py             # /reports/daily, weekly, monthly, etc.
+│   │   ├── gst.py                 # /reports/gst
+│   │   ├── recommendations.py     # /recommendations/trending, personal, upsell
+│   │   └── exports.py             # /reports/export (CSV, PDF)
+│   ├── services/
+│   │   ├── report_service.py      # Report aggregation queries
+│   │   ├── gst_service.py         # GST computation logic
+│   │   ├── recommendation_engine.py  # ML recommendation logic
+│   │   └── export_service.py      # PDF (WeasyPrint) + CSV generation
+│   ├── ml/
+│   │   ├── models/                # Serialised model files (.joblib / .pkl)
+│   │   ├── training/              # Offline training scripts (scheduled)
+│   │   │   ├── demand_forecast.py
+│   │   │   └── collaborative_filter.py
+│   │   └── inference.py           # Load model → predict
+│   └── schemas/
+│       ├── report_schemas.py      # Pydantic response models
+│       └── recommendation_schemas.py
+├── tests/
+│   ├── test_reports.py
+│   ├── test_recommendations.py
+│   └── conftest.py
+├── Dockerfile
+├── pyproject.toml                 # Dependencies (uv / poetry)
+└── alembic/                       # DB migrations (read-only, schema-aware)
 ```
 
 ### 2.3 Standard Response Envelope
@@ -668,24 +781,174 @@ async handleRazorpayWebhook(
 
 ---
 
-## 9. Module 7 — Analytics & Reporting
+## 9. Module 7 — Analytics, Reporting & ML (FastAPI)
 
-### 9.1 Endpoints
+> **Service:** `analytics-service` · **Runtime:** Python 3.12 · **Framework:** FastAPI + Pydantic v2  
+> **Database:** PostgreSQL 15 **read replica** (SQLAlchemy 2.0 async) · **ML:** scikit-learn + pandas  
+> This module runs as a **separate microservice**. The NestJS gateway proxies all requests after JWT validation.
 
-| Method | Path | Description | Auth | Role |
-|--------|------|-------------|------|------|
-| GET | `/admin/reports/daily` | Hourly breakdown for a date | ✅ | admin+ |
-| GET | `/admin/reports/weekly` | Daily breakdown for a week | ✅ | admin+ |
-| GET | `/admin/reports/monthly` | Weekly/daily breakdown | ✅ | admin+ |
-| GET | `/admin/reports/quarterly` | Monthly breakdown | ✅ | admin+ |
-| GET | `/admin/reports/half-yearly` | 6-month breakdown | ✅ | admin+ |
-| GET | `/admin/reports/annual` | 12-month breakdown | ✅ | admin+ |
-| GET | `/admin/reports/gst` | GST summary (CGST + SGST) | ✅ | admin+ |
-| GET | `/admin/reports/export` | Download PDF / CSV | ✅ | admin+ |
+### 9.1 Inter-Service Communication
+
+```mermaid
+sequenceDiagram
+    Admin Portal->>NestJS Gateway: GET /api/v1/admin/reports/daily?outlet_id=X&date=Y
+    NestJS Gateway->>NestJS Gateway: JWT verify + RolesGuard(admin+)
+    NestJS Gateway->>FastAPI: GET http://analytics:8000/reports/daily?outlet_id=X&date=Y
+    Note right of NestJS Gateway: Headers forwarded:<br/>X-User-Id, X-User-Role,<br/>X-Request-Id (tracing)
+    FastAPI->>PG Read Replica: Async aggregation query
+    PG Read Replica-->>FastAPI: Result rows
+    FastAPI->>Redis: Cache with key report:daily:{outlet}:{date} TTL 5m
+    FastAPI-->>NestJS Gateway: { outlet, date, summary, hourly, top_items }
+    NestJS Gateway-->>Admin Portal: { success: true, data: { ... } }
+```
+
+**NestJS Proxy Module** (`analytics-proxy/`):
+
+```typescript
+// modules/analytics-proxy/analytics-proxy.controller.ts
+@Controller('admin/reports')
+@UseGuards(JwtAuthGuard, RolesGuard)
+@Roles('admin', 'super_admin')
+export class AnalyticsProxyController {
+  constructor(private readonly httpService: HttpService) {}
+
+  @All('*')
+  async proxyToAnalytics(@Req() req: Request, @CurrentUser() user: JwtPayload) {
+    const analyticsUrl = `${process.env.ANALYTICS_SERVICE_URL}${req.path.replace('/api/v1/admin/', '/')}`;
+    const response = await this.httpService.axiosRef({
+      method: req.method,
+      url: analyticsUrl,
+      params: req.query,
+      data: req.body,
+      headers: {
+        'X-User-Id': user.sub,
+        'X-User-Role': user.role,
+        'X-Request-Id': req.headers['x-request-id'],
+      },
+    });
+    return { success: true, data: response.data };
+  }
+}
+```
+
+**FastAPI Internal Auth** (verifies request came from gateway, not external):
+
+```python
+# app/dependencies.py
+async def verify_internal_auth(request: Request):
+    """Ensures requests only come from the NestJS gateway (internal network)."""
+    user_id = request.headers.get("X-User-Id")
+    user_role = request.headers.get("X-User-Role")
+    if not user_id or not user_role:
+        raise HTTPException(status_code=403, detail="Direct access forbidden")
+    if user_role not in ("admin", "super_admin"):
+        raise HTTPException(status_code=403, detail="Insufficient role")
+    return {"user_id": user_id, "role": user_role}
+```
+
+### 9.2 Report Endpoints (FastAPI Internal)
+
+> **External URL** (via gateway): `/api/v1/admin/reports/*`  
+> **Internal URL** (FastAPI direct): `http://analytics:8000/reports/*`
+
+| Method | Internal Path | External Path (via gateway) | Description |
+|--------|--------------|---------------------------|-------------|
+| GET | `/reports/daily` | `/admin/reports/daily` | Hourly breakdown for a date |
+| GET | `/reports/weekly` | `/admin/reports/weekly` | Daily breakdown for a week |
+| GET | `/reports/monthly` | `/admin/reports/monthly` | Weekly/daily breakdown |
+| GET | `/reports/quarterly` | `/admin/reports/quarterly` | Monthly breakdown |
+| GET | `/reports/half-yearly` | `/admin/reports/half-yearly` | 6-month breakdown |
+| GET | `/reports/annual` | `/admin/reports/annual` | 12-month breakdown |
+| GET | `/reports/gst` | `/admin/reports/gst` | GST summary (CGST + SGST) |
+| GET | `/reports/export` | `/admin/reports/export` | Download PDF / CSV |
 
 **Query params**: `?outlet_id=uuid&date=2026-03-06` (daily), `?period=2026-03` (monthly), etc.
 
-### 9.2 GET /admin/reports/daily
+### 9.3 ML-Powered Recommendation Endpoints (New)
+
+| Method | Internal Path | External Path (via gateway) | Description |
+|--------|--------------|---------------------------|-------------|
+| GET | `/recommendations/trending` | `/recommendations/trending` | Top trending items by outlet (last 7 days) |
+| GET | `/recommendations/personal/:userId` | `/recommendations/personal/:userId` | Personalised picks based on order history |
+| GET | `/recommendations/upsell/:menuItemId` | `/recommendations/upsell/:menuItemId` | "Frequently bought together" items |
+
+### 9.4 Recommendation Engine
+
+```python
+# app/services/recommendation_engine.py
+from sklearn.neighbors import NearestNeighbors
+import pandas as pd
+import joblib
+from functools import lru_cache
+
+class RecommendationEngine:
+    """Collaborative filtering + popularity-based hybrid recommender."""
+
+    def __init__(self, model_path: str = "app/ml/models/collab_filter.joblib"):
+        self.model: NearestNeighbors = joblib.load(model_path)
+        self.item_vectors: pd.DataFrame = joblib.load("app/ml/models/item_vectors.joblib")
+
+    async def trending(self, outlet_id: str, days: int = 7, limit: int = 10) -> list[dict]:
+        """Top items by order frequency in the last N days (popularity-based)."""
+        query = """
+            SELECT mi.id, mi.name, mi.slug, COUNT(*) as order_count,
+                   SUM(oi.subtotal) as revenue
+            FROM order_items oi
+            JOIN menu_items mi ON oi.menu_item_id = mi.id
+            JOIN orders o ON oi.order_id = o.id
+            WHERE o.outlet_id = :outlet_id
+              AND o.created_at >= NOW() - INTERVAL :days DAY
+              AND o.status NOT IN ('expired', 'cancelled')
+            GROUP BY mi.id, mi.name, mi.slug
+            ORDER BY order_count DESC
+            LIMIT :limit
+        """
+        # Executed via async SQLAlchemy session
+        ...
+
+    async def personal(self, user_id: str, limit: int = 5) -> list[dict]:
+        """Collaborative filtering: find similar users → recommend their top items."""
+        user_vector = await self._get_user_vector(user_id)
+        distances, indices = self.model.kneighbors([user_vector], n_neighbors=20)
+        # Aggregate top items from similar users, exclude already-ordered
+        ...
+
+    async def upsell(self, menu_item_id: str, limit: int = 3) -> list[dict]:
+        """Frequently bought together — association rule mining."""
+        query = """
+            SELECT mi2.id, mi2.name, mi2.slug, COUNT(*) as co_occurrence
+            FROM order_items oi1
+            JOIN order_items oi2 ON oi1.order_id = oi2.order_id AND oi1.menu_item_id != oi2.menu_item_id
+            JOIN menu_items mi2 ON oi2.menu_item_id = mi2.id
+            WHERE oi1.menu_item_id = :menu_item_id
+            GROUP BY mi2.id, mi2.name, mi2.slug
+            ORDER BY co_occurrence DESC
+            LIMIT :limit
+        """
+        ...
+```
+
+### 9.5 ML Training Pipeline
+
+```mermaid
+flowchart LR
+    CRON["Scheduled Job\n(daily 2 AM)"] --> EXTRACT["Extract order history\nfrom PG read replica"]
+    EXTRACT --> TRANSFORM["Build user-item matrix\n(pandas)"]
+    TRANSFORM --> TRAIN["Train NearestNeighbors\n(scikit-learn)"]
+    TRAIN --> SERIALIZE["Serialize model\n(joblib → S3)"]
+    SERIALIZE --> RELOAD["FastAPI hot-reload\nmodel on next request"]
+```
+
+| ML Feature | Algorithm | Retraining | Fallback |
+|-----------|-----------|-----------|----------|
+| **Trending items** | SQL aggregation (no ML) | Real-time | Top 10 all-time |
+| **Personal recommendations** | k-NN collaborative filtering | Daily (2 AM) | Trending items |
+| **Upsell / cross-sell** | Association rule mining (Apriori) | Daily (2 AM) | Random items from same category |
+| **Demand forecasting** | Prophet / ARIMA (future v3) | Weekly | Historical average |
+
+### 9.6 Report Responses
+
+**GET /reports/daily** (FastAPI internal → wrapped by gateway)
 
 ```json
 {
@@ -713,7 +976,7 @@ async handleRazorpayWebhook(
 }
 ```
 
-### 9.3 GET /admin/reports/gst
+**GET /reports/gst**
 
 ```json
 {
@@ -728,6 +991,57 @@ async handleRazorpayWebhook(
     "sgst_collected": 1231.25,
     "total_gst_collected": 2462.50,
     "gross_revenue": 107450.00
+  }
+}
+```
+
+**GET /recommendations/trending**
+
+```json
+{
+  "success": true,
+  "data": {
+    "outlet_id": "main-campus-uuid",
+    "period_days": 7,
+    "items": [
+      { "id": "uuid", "name": "Margherita Pizza", "slug": "margherita-pizza", "order_count": 142, "revenue": 28258.00 },
+      { "id": "uuid", "name": "Pepperoni Feast", "slug": "pepperoni-feast", "order_count": 98, "revenue": 24402.00 },
+      { "id": "uuid", "name": "Garlic Bread", "slug": "garlic-bread", "order_count": 87, "revenue": 8700.00 }
+    ]
+  }
+}
+```
+
+**GET /recommendations/personal/:userId**
+
+```json
+{
+  "success": true,
+  "data": {
+    "user_id": "user-uuid",
+    "strategy": "collaborative_filtering",
+    "items": [
+      { "id": "uuid", "name": "BBQ Chicken Pizza", "slug": "bbq-chicken-pizza", "confidence": 0.87, "reason": "Users with similar taste ordered this" },
+      { "id": "uuid", "name": "Loaded Nachos", "slug": "loaded-nachos", "confidence": 0.72, "reason": "Popular combo with your past orders" }
+    ],
+    "fallback": false
+  }
+}
+```
+
+**GET /recommendations/upsell/:menuItemId**
+
+```json
+{
+  "success": true,
+  "data": {
+    "menu_item_id": "pizza-1-uuid",
+    "menu_item_name": "Margherita Pizza",
+    "frequently_bought_together": [
+      { "id": "uuid", "name": "Garlic Bread", "co_occurrence": 68, "price": 99.00 },
+      { "id": "uuid", "name": "Coca-Cola 330ml", "co_occurrence": 54, "price": 40.00 },
+      { "id": "uuid", "name": "Extra Cheese Dip", "co_occurrence": 41, "price": 30.00 }
+    ]
   }
 }
 ```
@@ -966,6 +1280,7 @@ CREATE TABLE notification_dlq (
 ```yaml
 version: '3.9'
 services:
+  # ── NestJS API Gateway ──────────────────────────
   api:
     build: ./backend
     ports: ["3000:3000"]
@@ -973,24 +1288,43 @@ services:
       DATABASE_URL: postgres://postgres:secret@db:5432/frescos
       REDIS_URL: redis://cache:6379
       JWT_PRIVATE_KEY_PATH: /secrets/private.pem
+      ANALYTICS_SERVICE_URL: http://analytics:8000  # Internal service discovery
       RAZORPAY_KEY_ID: rzp_live_xxx
       RAZORPAY_KEY_SECRET: xxx
       TWILIO_ACCOUNT_SID: ACxxx
       TWILIO_AUTH_TOKEN: xxx
       TWILIO_PHONE: +1555xxx
-    depends_on: [db, cache]
+    depends_on: [db, cache, analytics]
 
+  # ── FastAPI Analytics Microservice ──────────────
+  analytics:
+    build: ./analytics-service
+    ports: ["8000:8000"]   # Exposed only for development; Nginx doesn't route here
+    environment:
+      DATABASE_URL: postgres://readonly:secret@db:5432/frescos?sslmode=disable
+      REDIS_URL: redis://cache:6379
+      S3_BUCKET: frescos-reports
+      ML_MODEL_PATH: /app/ml/models
+      ALLOWED_GATEWAY_HOSTS: api  # Only accept requests from NestJS container
+    depends_on: [db, cache]
+    volumes:
+      - ml_models:/app/ml/models
+
+  # ── Database ────────────────────────────────────
   db:
     image: postgres:15-alpine
     volumes: [pgdata:/var/lib/postgresql/data]
     environment:
       POSTGRES_DB: frescos
       POSTGRES_PASSWORD: secret
+    # In production: use a read replica for analytics-service
 
+  # ── Cache ───────────────────────────────────────
   cache:
     image: redis:7-alpine
     command: redis-server --requirepass secret
 
+  # ── Reverse Proxy ───────────────────────────────
   nginx:
     image: nginx:alpine
     ports: ["80:80", "443:443"]
@@ -998,21 +1332,25 @@ services:
 
 volumes:
   pgdata:
+  ml_models:     # Persisted ML model artifacts
 ```
 
 ### 15.2 Production (v2)
 
 | Component | Service |
 |-----------|---------|
-| API | AWS ECS (Fargate) or Google Cloud Run |
-| Database | AWS RDS PostgreSQL (Multi-AZ) |
+| NestJS Gateway | AWS ECS (Fargate) or Google Cloud Run |
+| FastAPI Analytics | AWS ECS (Fargate) — same cluster, internal ALB | 
+| Database (Primary) | AWS RDS PostgreSQL (Multi-AZ) |
+| Database (Read Replica) | AWS RDS Read Replica (analytics-service connects here) |
 | Cache | AWS ElastiCache for Redis |
-| Media | AWS S3 + CloudFront CDN |
+| Media + Reports | AWS S3 + CloudFront CDN |
+| ML Models | AWS S3 (model artifacts) → mounted in ECS task |
 | Secrets | AWS Secrets Manager |
 | Monitoring | Datadog or AWS CloudWatch |
-| CI/CD | GitHub Actions → ECR → ECS deploy |
+| CI/CD | GitHub Actions → ECR → ECS deploy (both services) |
 
-### 15.3 Environment Variables
+### 15.3 Environment Variables — NestJS Gateway
 
 ```bash
 # Server
@@ -1024,6 +1362,9 @@ DATABASE_URL=postgres://user:pass@host:5432/frescos?sslmode=require
 
 # Redis
 REDIS_URL=redis://:password@host:6379
+
+# Analytics Service (internal)
+ANALYTICS_SERVICE_URL=http://analytics:8000
 
 # JWT
 JWT_PRIVATE_KEY_PATH=/run/secrets/jwt_private.pem
@@ -1051,3 +1392,99 @@ WHATSAPP_PHONE=+91XXXXXXXXXX
 AWS_S3_BUCKET=frescos-media
 AWS_REGION=ap-south-1
 ```
+
+### 15.4 Environment Variables — FastAPI Analytics Service
+
+```bash
+# Server
+PORT=8000
+ENVIRONMENT=production
+DEBUG=false
+
+# Database (READ-ONLY replica)
+DATABASE_URL=postgres://readonly:pass@replica-host:5432/frescos?sslmode=require
+
+# Redis (shared cache)
+REDIS_URL=redis://:password@host:6379
+
+# ML Models
+ML_MODEL_PATH=/app/ml/models
+ML_RETRAIN_CRON="0 2 * * *"     # Daily at 2 AM IST
+
+# Report Storage
+S3_BUCKET=frescos-reports
+AWS_REGION=ap-south-1
+
+# Security
+ALLOWED_GATEWAY_HOSTS=api,10.0.0.0/16   # Accept only from internal network
+```
+
+---
+
+## 16. Technology Decision Record
+
+### TDR-001: Hybrid Architecture — NestJS Gateway + FastAPI Analytics
+
+**Status:** Accepted · **Date:** 7 March 2026
+
+#### Context
+
+The system requires two fundamentally different workloads:
+
+| Workload | Characteristics |
+|----------|----------------|
+| **Customer-facing APIs** | High concurrency, real-time WebSockets, I/O-bound, payment processing |
+| **Analytics & ML** | CPU-bound aggregations, data science libraries, model training, heavy reporting |
+
+A single runtime cannot optimally serve both.
+
+#### Decision
+
+| Service | Technology | Responsibility |
+|---------|-----------|----------------|
+| **API Gateway** | Node.js 20 + NestJS (TypeScript) | Auth, Users, Menu, Orders, Payments, Inventory, Admin, Notifications, WebSocket |
+| **Analytics Microservice** | Python 3.12 + FastAPI (Pydantic v2) | Reports, GST summaries, ML recommendations, CSV/PDF exports |
+
+#### Rationale — Why NestJS for the Gateway
+
+1. **WebSocket-first** — 7+ real-time event types (order status, kitchen alerts, low-stock). Node.js event-loop + Socket.IO handles 10K+ idle connections efficiently.
+2. **SDK ecosystem** — Razorpay, Firebase Admin, Twilio all have first-class Node.js SDKs.
+3. **NestJS structure** — Guards, Interceptors, Decorators, modular DI — enterprise-grade without boilerplate.
+4. **TypeScript safety** — Compile-time type checking is critical for payment-processing code paths.
+
+#### Rationale — Why FastAPI for Analytics
+
+1. **Python data science ecosystem** — pandas, scikit-learn, Prophet are native Python libraries with no viable Node.js equivalents.
+2. **Pydantic v2** — The fastest data validation library available; auto-generates OpenAPI docs.
+3. **Async SQLAlchemy 2.0** — True async DB access on the read replica without blocking.
+4. **ML pipeline integration** — Model training (scikit-learn, joblib) and inference live in the same codebase.
+5. **Report generation** — WeasyPrint (PDF) and pandas (CSV) are Python-native.
+
+#### Why Not Python FastAPI for Everything?
+
+| Concern | Detail |
+|---------|--------|
+| **WebSocket maturity** | FastAPI supports WebSockets, but Socket.IO rooms/namespaces/broadcasting is far more mature in Node.js. |
+| **Concurrent idle connections** | Node.js event-loop handles idle WebSocket connections more efficiently than Python asyncio at scale. |
+| **Payment SDK quality** | Razorpay's official Python SDK is community-maintained; Node.js SDK is first-party. |
+| **Team velocity** | NestJS's decorator-based architecture enabled rapid Module 1–9 development in v1. |
+
+#### Why Not Go + gRPC for Everything?
+
+| Concern | Detail |
+|---------|--------|
+| **Browser incompatibility** | gRPC requires a gRPC-Web proxy (Envoy) for browser-based QR ordering — unnecessary complexity. |
+| **Development speed** | Go's verbosity slows v1 iteration; error handling (`if err != nil`) adds boilerplate. |
+| **WebSocket story** | No built-in WebSocket framework comparable to NestJS `@WebSocketGateway()`. |
+| **Data science** | No pandas/scikit-learn equivalent — would still need a Python sidecar for ML. |
+| **Hiring** | Go developers are harder to find in India's startup ecosystem compared to Node.js/Python. |
+| **When to reconsider** | If order throughput exceeds 50K+/min, extract a Go microservice for the hot path (order routing). |
+
+#### Consequences
+
+- **Pro:** Each service uses the best tool for its workload. Analytics can scale independently.
+- **Pro:** Read replica isolates analytics queries from transactional DB load.
+- **Pro:** ML models can be retrained without touching the gateway.
+- **Con:** Two deployment pipelines, two Docker images, two sets of dependencies.
+- **Con:** Inter-service latency (mitigated by internal Docker network + Redis caching).
+- **Mitigation:** Single Docker Compose for local dev; single CI/CD pipeline with parallel builds.
