@@ -1,0 +1,56 @@
+Running `(cd /Users/chandiprasad/.pub-cache/hosted/pub.dev/objective_c-9.3.0/; TMPDIR=/var/folders/2f/7s4yhp1d56b86rk7_cp4424h0000gn/T/ PATH=/Users/chandiprasad/.codex/tmp/arg0/codex-arg0s6HNis:/Users/chandiprasad/.nvm/versions/node/v25.9.0/lib/node_modules/@openai/codex/node_modules/@openai/codex-darwin-arm64/vendor/aarch64-apple-darwin/path:/Users/chandiprasad/.nvm/versions/node/v25.9.0/bin:/usr/local/bin:/System/Cryptexes/App/usr/bin:/usr/bin:/bin:/usr/sbin:/sbin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/local/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/appleinternal/bin:/opt/pmk/env/global/bin:/opt/homebrew/bin HOME=/Users/chandiprasad /opt/homebrew/share/flutter/bin/cache/dart-sdk/bin/dart --packages=/Users/chandiprasad/my-data/frescos-app/campus_food_ordering_system/.dart_tool/package_config.json /Users/chandiprasad/my-data/frescos-app/campus_food_ordering_system/.dart_tool/hooks_runner/objective_c/de310349bc/hook.dill --config=/Users/chandiprasad/my-data/frescos-app/campus_food_ordering_system/.dart_tool/hooks_runner/objective_c/de310349bc/input.json )`.
+INFO: 2026-05-02 22:07:28.537111: Running `/Library/Developer/CommandLineTools/usr/bin/clang --version`.
+
+INFO: 2026-05-02 22:07:28.554436: Running `/Library/Developer/CommandLineTools/usr/bin/clang --version`.
+
+INFO: 2026-05-02 22:07:28.569133: Running: /Library/Developer/CommandLineTools/usr/bin/clang -isysroot /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk -target arm64-apple-darwin -mmacos-version-min=13 -c /Users/chandiprasad/.pub-cache/hosted/pub.dev/objective_c-9.3.0/src/include/dart_api_dl.c -fpic -I src -o /Users/chandiprasad/my-data/frescos-app/campus_food_ordering_system/.dart_tool/hooks_runner/shared/objective_c/build/de310349bc/obj/src/include/dart_api_dl.c.o
+
+INFO: 2026-05-02 22:07:28.569723: Running: /Library/Developer/CommandLineTools/usr/bin/clang -isysroot /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk -target arm64-apple-darwin -mmacos-version-min=13 -c /Users/chandiprasad/.pub-cache/hosted/pub.dev/objective_c-9.3.0/src/objective_c.c -fpic -I src -o /Users/chandiprasad/my-data/frescos-app/campus_food_ordering_system/.dart_tool/hooks_runner/shared/objective_c/build/de310349bc/obj/src/objective_c.c.o
+
+INFO: 2026-05-02 22:07:28.570068: Running: /Library/Developer/CommandLineTools/usr/bin/clang -isysroot /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk -target arm64-apple-darwin -mmacos-version-min=13 -c /Users/chandiprasad/.pub-cache/hosted/pub.dev/objective_c-9.3.0/test/util.c -fpic -I src -o /Users/chandiprasad/my-data/frescos-app/campus_food_ordering_system/.dart_tool/hooks_runner/shared/objective_c/build/de310349bc/obj/test/util.c.o
+
+INFO: 2026-05-02 22:07:28.570262: Running: /Library/Developer/CommandLineTools/usr/bin/clang -isysroot /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk -target arm64-apple-darwin -mmacos-version-min=13 -x objective-c -fobjc-arc -c /Users/chandiprasad/.pub-cache/hosted/pub.dev/objective_c-9.3.0/src/input_stream_adapter.m -fpic -I src -o /Users/chandiprasad/my-data/frescos-app/campus_food_ordering_system/.dart_tool/hooks_runner/shared/objective_c/build/de310349bc/obj/src/input_stream_adapter.m.o
+
+INFO: 2026-05-02 22:07:28.570476: Running: /Library/Developer/CommandLineTools/usr/bin/clang -isysroot /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk -target arm64-apple-darwin -mmacos-version-min=13 -x objective-c -fobjc-arc -c /Users/chandiprasad/.pub-cache/hosted/pub.dev/objective_c-9.3.0/src/objective_c.m -fpic -I src -o /Users/chandiprasad/my-data/frescos-app/campus_food_ordering_system/.dart_tool/hooks_runner/shared/objective_c/build/de310349bc/obj/src/objective_c.m.o
+
+INFO: 2026-05-02 22:07:28.570785: Running: /Library/Developer/CommandLineTools/usr/bin/clang -isysroot /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk -target arm64-apple-darwin -mmacos-version-min=13 -x objective-c -fobjc-arc -c /Users/chandiprasad/.pub-cache/hosted/pub.dev/objective_c-9.3.0/src/observer.m -fpic -I src -o /Users/chandiprasad/my-data/frescos-app/campus_food_ordering_system/.dart_tool/hooks_runner/shared/objective_c/build/de310349bc/obj/src/observer.m.o
+
+INFO: 2026-05-02 22:07:28.571228: Running: /Library/Developer/CommandLineTools/usr/bin/clang -isysroot /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk -target arm64-apple-darwin -mmacos-version-min=13 -x objective-c -fobjc-arc -c /Users/chandiprasad/.pub-cache/hosted/pub.dev/objective_c-9.3.0/src/ns_number.m -fpic -I src -o /Users/chandiprasad/my-data/frescos-app/campus_food_ordering_system/.dart_tool/hooks_runner/shared/objective_c/build/de310349bc/obj/src/ns_number.m.o
+
+INFO: 2026-05-02 22:07:28.571482: Running: /Library/Developer/CommandLineTools/usr/bin/clang -isysroot /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk -target arm64-apple-darwin -mmacos-version-min=13 -x objective-c -fobjc-arc -c /Users/chandiprasad/.pub-cache/hosted/pub.dev/objective_c-9.3.0/src/protocol.m -fpic -I src -o /Users/chandiprasad/my-data/frescos-app/campus_food_ordering_system/.dart_tool/hooks_runner/shared/objective_c/build/de310349bc/obj/src/protocol.m.o
+
+INFO: 2026-05-02 22:07:28.571689: Running: /Library/Developer/CommandLineTools/usr/bin/clang -isysroot /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk -target arm64-apple-darwin -mmacos-version-min=13 -x objective-c -fobjc-arc -c /Users/chandiprasad/.pub-cache/hosted/pub.dev/objective_c-9.3.0/src/objective_c_bindings_generated.m -fpic -I src -o /Users/chandiprasad/my-data/frescos-app/campus_food_ordering_system/.dart_tool/hooks_runner/shared/objective_c/build/de310349bc/obj/src/objective_c_bindings_generated.m.o
+
+INFO: 2026-05-02 22:07:28.697241: 
+INFO: 2026-05-02 22:07:28.697281: 
+INFO: 2026-05-02 22:07:28.697298: Generated /Users/chandiprasad/my-data/frescos-app/campus_food_ordering_system/.dart_tool/hooks_runner/shared/objective_c/build/de310349bc/obj/test/util.c.o
+
+.c.o
+INFO: 2026-05-02 22:07:28.696410: 
+INFO: 2026-05-02 22:07:28.696417: 
+INFO: 2026-05-02 22:07:28.696424: Generated /Users/chandiprasad/my-data/frescos-app/campus_food_ordering_system/.dart_tool/hooks_runner/shared/objective_c/build/de310349bc/obj/src/include/dart_api_dl.c.o
+INFO: 2026-05-02 22:07:28.696490: 
+INFO: 2026-05-02 22:07:28.696496: 
+INFO: 2026-05-02 22:07:28.696502: Generated /Users/chandiprasad/my-data/frescos-app/campus_food_ordering_system/.dart_tool/hooks_runner/shared/objective_c/build/de310349bc/obj/src/observer.m.o
+
+INFO: 2026-05-02 22:07:28.701611: 
+INFO: 2026-05-02 22:07:28.701644: 
+INFO: 2026-05-02 22:07:28.701651: Generated /Users/chandiprasad/my-data/frescos-app/campus_food_ordering_system/.dart_tool/hooks_runner/shared/objective_c/build/de310349bc/obj/src/protocol.m.o
+
+INFO: 2026-05-02 22:07:28.919362: 
+INFO: 2026-05-02 22:07:28.919449: 
+INFO: 2026-05-02 22:07:28.919502: Generated /Users/chandiprasad/my-data/frescos-app/campus_food_ordering_system/.dart_tool/hooks_runner/shared/objective_c/build/de310349bc/obj/src/ns_number.m.o
+
+INFO: 2026-05-02 22:07:28.928405: 
+INFO: 2026-05-02 22:07:28.928442: 
+INFO: 2026-05-02 22:07:28.928450: Generated /Users/chandiprasad/my-data/frescos-app/campus_food_ordering_system/.dart_tool/hooks_runner/shared/objective_c/build/de310349bc/obj/src/objective_c.m.o
+INFO: 2026-05-02 22:07:28.928487: 
+INFO: 2026-05-02 22:07:28.928498: 
+INFO: 2026-05-02 22:07:28.928504: Generated /Users/chandiprasad/my-data/frescos-app/campus_food_ordering_system/.dart_tool/hooks_runner/shared/objective_c/build/de310349bc/obj/src/input_stream_adapter.m.o
+
+INFO: 2026-05-02 22:07:28.941245: Running: /Library/Developer/CommandLineTools/usr/bin/clang -shared -Wl,-encryptable -undefined dynamic_lookup -isysroot /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk -target arm64-apple-darwin -mmacos-version-min=13 /Users/chandiprasad/my-data/frescos-app/campus_food_ordering_system/.dart_tool/hooks_runner/shared/objective_c/build/de310349bc/obj/src/include/dart_api_dl.c.o /Users/chandiprasad/my-data/frescos-app/campus_food_ordering_system/.dart_tool/hooks_runner/shared/objective_c/build/de310349bc/obj/src/objective_c.c.o /Users/chandiprasad/my-data/frescos-app/campus_food_ordering_system/.dart_tool/hooks_runner/shared/objective_c/build/de310349bc/obj/test/util.c.o /Users/chandiprasad/my-data/frescos-app/campus_food_ordering_system/.dart_tool/hooks_runner/shared/objective_c/build/de310349bc/obj/src/input_stream_adapter.m.o /Users/chandiprasad/my-data/frescos-app/campus_food_ordering_system/.dart_tool/hooks_runner/shared/objective_c/build/de310349bc/obj/src/objective_c.m.o /Users/chandiprasad/my-data/frescos-app/campus_food_ordering_system/.dart_tool/hooks_runner/shared/objective_c/build/de310349bc/obj/src/observer.m.o /Users/chandiprasad/my-data/frescos-app/campus_food_ordering_system/.dart_tool/hooks_runner/shared/objective_c/build/de310349bc/obj/src/ns_number.m.o /Users/chandiprasad/my-data/frescos-app/campus_food_ordering_system/.dart_tool/hooks_runner/shared/objective_c/build/de310349bc/obj/src/protocol.m.o /Users/chandiprasad/my-data/frescos-app/campus_food_ordering_system/.dart_tool/hooks_runner/shared/objective_c/build/de310349bc/obj/src/objective_c_bindings_generated.m.o -o /Users/chandiprasad/my-data/frescos-app/campus_food_ordering_system/.dart_tool/hooks_runner/shared/objective_c/build/de310349bc/objective_c.dylib
+
+INFO: 2026-05-02 22:07:29.107556: 
+INFO: 2026-05-02 22:07:29.107613: 
+INFO: 2026-05-02 22:07:29.107623: Generated /Users/chandiprasad/my-data/frescos-app/campus_food_ordering_system/.dart_tool/hooks_runner/shared/objective_c/build/de310349bc/objective_c.dylib
+

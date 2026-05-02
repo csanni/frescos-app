@@ -511,6 +511,7 @@ class _AdminOrderCard extends StatelessWidget {
                 ),
                 const SizedBox(width: AppSpacing.sm),
                 SizedBox(
+                  width: 96,
                   height: 36,
                   child: OutlinedButton(
                     onPressed: () {

@@ -1,0 +1,1 @@
+ /Users/chandiprasad/my-data/frescos-app/campus_food_ordering_system/build/52ed537c201e62a58d4fae9b83b7825c/dart_build_result.json:  /Users/chandiprasad/my-data/frescos-app/campus_food_ordering_system/.dart_tool/package_config.json /Users/chandiprasad/my-data/frescos-app/campus_food_ordering_system/pubspec.yaml /opt/homebrew/share/flutter/bin/cache/dart-sdk/version

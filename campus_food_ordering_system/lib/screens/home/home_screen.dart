@@ -8,7 +8,7 @@ import '../../providers/cart_provider.dart';
 import '../cart/cart_screen.dart';
 import '../menu/menu_item_detail_screen.dart';
 import '../orders/order_history_screen.dart';
-import '../admin/admin_screen.dart';
+import '../notifications/notifications_screen.dart';
 import '../profile/profile_screen.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -74,6 +74,27 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     return 'Good Evening';
   }
 
+  String _getCategoryDisplayLabel(String category) {
+    switch (category.toLowerCase()) {
+      case 'all':
+        return 'All';
+      case 'pizza':
+        return '🍕 Pizzas';
+      case 'sides':
+        return '🥖 Sides';
+      case 'japanese':
+        return '🍣 Japanese';
+      case 'beverages':
+        return '☕ Beverages';
+      case 'desserts':
+        return '🍰 Desserts';
+      case 'combo':
+        return '🍱 Combo Meals';
+      default:
+        return category;
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -82,7 +103,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
         children: [
           _buildMenuTab(),
           const OrderHistoryScreen(),
-          const AdminScreen(),
+          const NotificationsScreen(),
           const ProfileScreen(),
         ],
       ),
@@ -92,28 +113,20 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
 
   Widget _buildBottomNav() {
     return Container(
-      decoration: BoxDecoration(
-        color: Theme.of(context).scaffoldBackgroundColor,
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.08),
-            blurRadius: 20,
-            offset: const Offset(0, -4),
-          ),
-        ],
+      decoration: const BoxDecoration(
+        color: AppColors.surface,
+        border: Border(top: BorderSide(color: AppColors.divider)),
       ),
       child: SafeArea(
+        top: false,
         child: Padding(
-          padding: const EdgeInsets.symmetric(
-            horizontal: AppSpacing.sm,
-            vertical: AppSpacing.sm,
-          ),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceAround,
             children: [
               _buildNavItem(0, Icons.restaurant_menu_rounded, 'Menu'),
               _buildNavItem(1, Icons.receipt_long_rounded, 'Orders'),
-              _buildNavItem(2, Icons.admin_panel_settings_rounded, 'Admin'),
+              _buildNavItem(2, Icons.notifications_rounded, 'Alerts'),
               _buildNavItem(3, Icons.person_rounded, 'Profile'),
             ],
           ),
@@ -128,35 +141,43 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       onTap: () => setState(() => _currentNavIndex = index),
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 250),
-        padding: EdgeInsets.symmetric(
-          horizontal: isSelected ? AppSpacing.lg : AppSpacing.md,
-          vertical: AppSpacing.sm,
-        ),
-        decoration: BoxDecoration(
-          color: isSelected
-              ? AppColors.primary.withValues(alpha: 0.12)
-              : Colors.transparent,
-          borderRadius: BorderRadius.circular(AppSpacing.radiusXl),
-        ),
-        child: Row(
+        padding: const EdgeInsets.symmetric(vertical: 4),
+        child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(
-              icon,
-              color: isSelected ? AppColors.primary : AppColors.textSecondary,
-              size: 24,
-            ),
-            if (isSelected) ...[
-              const SizedBox(width: AppSpacing.sm),
-              Text(
-                label,
-                style: TextStyle(
-                  color: AppColors.primary,
-                  fontWeight: FontWeight.w600,
-                  fontSize: 13,
+            Stack(
+              clipBehavior: Clip.none,
+              children: [
+                Icon(
+                  icon,
+                  color: isSelected ? AppColors.primary : AppColors.textHint,
+                  size: isSelected ? 26 : 24,
                 ),
+                if (index == 2)
+                  Positioned(
+                    right: -2,
+                    top: -1,
+                    child: Container(
+                      width: 8,
+                      height: 8,
+                      decoration: BoxDecoration(
+                        color: AppColors.error,
+                        shape: BoxShape.circle,
+                        border: Border.all(color: AppColors.surface, width: 2),
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+            const SizedBox(height: 2),
+            Text(
+              label,
+              style: TextStyle(
+                color: isSelected ? AppColors.primary : AppColors.textHint,
+                fontWeight: FontWeight.w600,
+                fontSize: 11,
               ),
-            ],
+            ),
           ],
         ),
       ),
@@ -164,88 +185,123 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   }
 
   Widget _buildMenuTab() {
-    return CustomScrollView(
-      slivers: [_buildAppBar(), _buildCategorySelector(), _buildMenuGrid()],
+    return SafeArea(
+      bottom: false,
+      child: Column(
+        children: [_buildAppBar(), _buildCategorySelector(), _buildMenuList()],
+      ),
     );
   }
 
   Widget _buildAppBar() {
-    return SliverAppBar(
-      expandedHeight: _showSearch ? 130 : 120,
-      floating: true,
-      pinned: true,
-      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-      flexibleSpace: FlexibleSpaceBar(
-        background: Container(
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              colors: [
-                AppColors.primary.withValues(alpha: 0.08),
-                Theme.of(context).scaffoldBackgroundColor,
-              ],
-              begin: Alignment.topCenter,
-              end: Alignment.bottomCenter,
-            ),
-          ),
-        ),
-      ),
-      title: _showSearch
-          ? _buildSearchField()
-          : Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  '$_greeting! 👋',
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: AppColors.textSecondary,
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 18, 20, 12),
+      child: Row(
+        children: [
+          Expanded(
+            child: _showSearch
+                ? _buildSearchField()
+                : Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        '$_greeting 🌤️',
+                        style: const TextStyle(
+                          color: AppColors.textSecondary,
+                          fontSize: 13,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      const Text(
+                        'Sanni!',
+                        style: TextStyle(
+                          color: AppColors.textPrimary,
+                          fontSize: 22,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ],
                   ),
-                ),
-                Text(
-                  'Fresco\'s Kitchen',
-                  style: Theme.of(
-                    context,
-                  ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700),
-                ),
-              ],
-            ),
-      actions: [
-        IconButton(
-          onPressed: () {
-            setState(() {
-              _showSearch = !_showSearch;
-              if (!_showSearch) {
-                _searchController.clear();
-                _searchQuery = '';
-              }
-            });
-          },
-          icon: Icon(
-            _showSearch ? Icons.close_rounded : Icons.search_rounded,
-            color: AppColors.textPrimary,
           ),
-        ),
-        _buildCartButton(),
-        const SizedBox(width: AppSpacing.sm),
-      ],
+          const SizedBox(width: 10),
+          _buildRoundIconButton(
+            icon: _showSearch ? Icons.close_rounded : Icons.search_rounded,
+            onPressed: () {
+              setState(() {
+                _showSearch = !_showSearch;
+                if (!_showSearch) {
+                  _searchController.clear();
+                  _searchQuery = '';
+                }
+              });
+            },
+          ),
+          const SizedBox(width: 10),
+          _buildCartButton(),
+        ],
+      ),
     );
   }
 
   Widget _buildSearchField() {
-    return TextField(
-      controller: _searchController,
-      autofocus: true,
-      decoration: InputDecoration(
-        hintText: 'Search for pizza, pasta...',
-        hintStyle: TextStyle(color: AppColors.textSecondary, fontSize: 14),
-        border: InputBorder.none,
-        enabledBorder: InputBorder.none,
-        focusedBorder: InputBorder.none,
-        contentPadding: EdgeInsets.zero,
-        filled: false,
+    return Container(
+      height: 44,
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(AppSpacing.radiusXl),
+        boxShadow: [
+          BoxShadow(
+            color: AppColors.textPrimary.withValues(alpha: 0.08),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
       ),
-      style: const TextStyle(fontSize: 14),
-      onChanged: (value) => setState(() => _searchQuery = value),
+      child: TextField(
+        controller: _searchController,
+        autofocus: true,
+        decoration: const InputDecoration(
+          hintText: 'Search menu',
+          border: InputBorder.none,
+          enabledBorder: InputBorder.none,
+          focusedBorder: InputBorder.none,
+          contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          filled: false,
+        ),
+        style: const TextStyle(fontSize: 14),
+        onChanged: (value) => setState(() => _searchQuery = value),
+      ),
+    );
+  }
+
+  Widget _buildRoundIconButton({
+    required IconData icon,
+    required VoidCallback onPressed,
+  }) {
+    return Material(
+      color: AppColors.surface,
+      shape: const CircleBorder(),
+      elevation: 0,
+      shadowColor: Colors.transparent,
+      child: InkWell(
+        onTap: onPressed,
+        customBorder: const CircleBorder(),
+        child: Container(
+          width: 44,
+          height: 44,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            boxShadow: [
+              BoxShadow(
+                color: AppColors.textPrimary.withValues(alpha: 0.08),
+                blurRadius: 8,
+                offset: const Offset(0, 2),
+              ),
+            ],
+          ),
+          child: Icon(icon, color: AppColors.textPrimary, size: 24),
+        ),
+      ),
     );
   }
 
@@ -254,22 +310,22 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       builder: (context, cart, child) {
         return Stack(
           children: [
-            IconButton(
+            _buildRoundIconButton(
+              icon: Icons.shopping_cart_rounded,
               onPressed: () {
                 Navigator.push(
                   context,
                   MaterialPageRoute(builder: (_) => const CartScreen()),
                 );
               },
-              icon: const Icon(Icons.shopping_bag_outlined),
             ),
             if (cart.itemCount > 0)
               Positioned(
-                right: 4,
-                top: 4,
-                child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 200),
-                  padding: const EdgeInsets.all(4),
+                right: -2,
+                top: -2,
+                child: Container(
+                  width: 20,
+                  height: 20,
                   decoration: const BoxDecoration(
                     color: AppColors.primary,
                     shape: BoxShape.circle,
@@ -278,7 +334,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                     '${cart.itemCount}',
                     style: const TextStyle(
                       color: Colors.white,
-                      fontSize: 10,
+                      fontSize: 11,
                       fontWeight: FontWeight.bold,
                     ),
                   ),
@@ -291,62 +347,53 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   }
 
   Widget _buildCategorySelector() {
-    return SliverToBoxAdapter(
-      child: SizedBox(
-        height: 50,
-        child: ListView.builder(
-          scrollDirection: Axis.horizontal,
-          padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
-          itemCount: MockData.categories.length,
-          itemBuilder: (context, index) {
-            final category = MockData.categories[index];
-            final isSelected = category == _selectedCategory;
-            return Padding(
-              padding: const EdgeInsets.only(right: AppSpacing.sm),
-              child: GestureDetector(
-                onTap: () => setState(() => _selectedCategory = category),
-                child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 200),
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: AppSpacing.lg,
-                    vertical: AppSpacing.sm,
-                  ),
-                  decoration: BoxDecoration(
-                    color: isSelected ? AppColors.primary : Colors.transparent,
-                    borderRadius: BorderRadius.circular(AppSpacing.radiusXl),
-                    border: Border.all(
-                      color: isSelected ? AppColors.primary : AppColors.divider,
-                      width: 1.5,
-                    ),
-                  ),
-                  child: Center(
-                    child: Text(
-                      category,
-                      style: TextStyle(
-                        color: isSelected
-                            ? Colors.white
-                            : AppColors.textPrimary,
-                        fontWeight: isSelected
-                            ? FontWeight.w600
-                            : FontWeight.w500,
-                        fontSize: 13,
-                      ),
+    return SizedBox(
+      height: 48,
+      child: ListView.builder(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 6),
+        itemCount: MockData.categories.length,
+        itemBuilder: (context, index) {
+          final category = MockData.categories[index];
+          final isSelected = category == _selectedCategory;
+          return Padding(
+            padding: const EdgeInsets.only(right: 4),
+            child: GestureDetector(
+              onTap: () => setState(() => _selectedCategory = category),
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 200),
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                decoration: BoxDecoration(
+                  color: isSelected
+                      ? AppColors.textPrimary
+                      : Colors.transparent,
+                  borderRadius: BorderRadius.circular(AppSpacing.radiusXl),
+                ),
+                child: Center(
+                  child: Text(
+                    _getCategoryDisplayLabel(category),
+                    style: TextStyle(
+                      color: isSelected
+                          ? Colors.white
+                          : AppColors.textSecondary,
+                      fontWeight: FontWeight.w600,
+                      fontSize: 13,
                     ),
                   ),
                 ),
               ),
-            );
-          },
-        ),
+            ),
+          );
+        },
       ),
     );
   }
 
-  Widget _buildMenuGrid() {
+  Widget _buildMenuList() {
     final items = _filteredItems;
 
     if (items.isEmpty) {
-      return SliverFillRemaining(
+      return Expanded(
         child: Center(
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -369,10 +416,11 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       );
     }
 
-    return SliverPadding(
-      padding: const EdgeInsets.all(AppSpacing.lg),
-      sliver: SliverList(
-        delegate: SliverChildBuilderDelegate((context, index) {
+    return Expanded(
+      child: ListView.builder(
+        padding: const EdgeInsets.fromLTRB(20, 8, 20, 12),
+        itemCount: items.length,
+        itemBuilder: (context, index) {
           return _MenuItemCard(
             item: items[index],
             onTap: () {
@@ -384,7 +432,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
               );
             },
           );
-        }, childCount: items.length),
+        },
       ),
     );
   }
@@ -404,65 +452,95 @@ class _MenuItemCard extends StatelessWidget {
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        margin: const EdgeInsets.only(bottom: AppSpacing.md),
+        margin: const EdgeInsets.only(bottom: 14),
+        padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
-          color: Theme.of(context).cardColor,
+          color: AppColors.surface,
           borderRadius: BorderRadius.circular(AppSpacing.radiusMd),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withValues(alpha: 0.04),
-              blurRadius: 10,
+              color: AppColors.textPrimary.withValues(alpha: 0.08),
+              blurRadius: 8,
               offset: const Offset(0, 2),
             ),
           ],
         ),
-        child: Padding(
-          padding: const EdgeInsets.all(AppSpacing.md),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Food image placeholder
-              Hero(
-                tag: 'menu-${item.id}',
-                child: Container(
-                  width: 100,
-                  height: 100,
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
-                    gradient: LinearGradient(
-                      colors: _getGradientColors(item.category),
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                    ),
-                  ),
-                  child: Center(
-                    child: Text(
-                      _getFoodEmoji(item.category),
-                      style: const TextStyle(fontSize: 36),
-                    ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Hero(
+              tag: 'menu-${item.id}',
+              child: Container(
+                width: 90,
+                height: 90,
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(AppSpacing.radiusSm),
+                  gradient: LinearGradient(
+                    colors: [
+                      _getItemColor(item),
+                      _getItemColor(item).withValues(alpha: 0.86),
+                    ],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
                   ),
                 ),
+                child: Icon(
+                  _getFoodIcon(item),
+                  color: Colors.white.withValues(alpha: 0.88),
+                  size: 36,
+                ),
               ),
-              const SizedBox(width: AppSpacing.md),
-              // Details
-              Expanded(
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: SizedBox(
+                height: 90,
                 child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        // Veg/Non-veg indicator
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                item.name,
+                                style: const TextStyle(
+                                  color: AppColors.textPrimary,
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                item.description,
+                                style: const TextStyle(
+                                  color: AppColors.textHint,
+                                  fontSize: 12,
+                                  height: 1.3,
+                                ),
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: 8),
                         Container(
-                          width: 16,
-                          height: 16,
+                          width: 20,
+                          height: 20,
                           decoration: BoxDecoration(
                             border: Border.all(
                               color: item.isVeg
                                   ? AppColors.veg
                                   : AppColors.nonVeg,
-                              width: 1.5,
+                              width: 2,
                             ),
-                            borderRadius: BorderRadius.circular(3),
+                            borderRadius: BorderRadius.circular(4),
                           ),
                           child: Center(
                             child: Container(
@@ -477,99 +555,19 @@ class _MenuItemCard extends StatelessWidget {
                             ),
                           ),
                         ),
-                        const SizedBox(width: AppSpacing.sm),
-                        Expanded(
-                          child: Text(
-                            item.name,
-                            style: Theme.of(context).textTheme.titleMedium
-                                ?.copyWith(fontWeight: FontWeight.w600),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
                       ],
                     ),
-                    const SizedBox(height: 4),
-                    // Rating
-                    Row(
-                      children: [
-                        const Icon(
-                          Icons.star_rounded,
-                          size: 14,
-                          color: AppColors.star,
-                        ),
-                        const SizedBox(width: 2),
-                        Text(
-                          '${item.rating}',
-                          style: Theme.of(context).textTheme.bodySmall
-                              ?.copyWith(fontWeight: FontWeight.w600),
-                        ),
-                        Text(
-                          ' (${item.ratingCount})',
-                          style: Theme.of(context).textTheme.bodySmall
-                              ?.copyWith(color: AppColors.textSecondary),
-                        ),
-                        const SizedBox(width: AppSpacing.sm),
-                        Icon(
-                          Icons.schedule_rounded,
-                          size: 12,
-                          color: AppColors.textSecondary,
-                        ),
-                        const SizedBox(width: 2),
-                        Text(
-                          '${item.prepTimeMinutes} min',
-                          style: Theme.of(context).textTheme.bodySmall
-                              ?.copyWith(color: AppColors.textSecondary),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      item.description,
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: AppColors.textSecondary,
-                      ),
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    const SizedBox(height: AppSpacing.sm),
-                    // Tags
-                    if (item.tags.isNotEmpty)
-                      Wrap(
-                        spacing: 4,
-                        children: item.tags.take(2).map((tag) {
-                          return Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 6,
-                              vertical: 2,
-                            ),
-                            decoration: BoxDecoration(
-                              color: AppColors.primary.withValues(alpha: 0.1),
-                              borderRadius: BorderRadius.circular(4),
-                            ),
-                            child: Text(
-                              tag,
-                              style: const TextStyle(
-                                fontSize: 10,
-                                color: AppColors.primary,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          );
-                        }).toList(),
-                      ),
-                    const SizedBox(height: AppSpacing.sm),
-                    // Price and Add button
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      crossAxisAlignment: CrossAxisAlignment.center,
                       children: [
                         Text(
-                          '₹${item.price.toStringAsFixed(0)}',
-                          style: Theme.of(context).textTheme.titleMedium
-                              ?.copyWith(
-                                fontWeight: FontWeight.w700,
-                                color: AppColors.primary,
-                              ),
+                          '₹ ${item.price.toStringAsFixed(0)}',
+                          style: const TextStyle(
+                            color: AppColors.primary,
+                            fontSize: 17,
+                            fontWeight: FontWeight.w700,
+                          ),
                         ),
                         if (quantityInCart > 0)
                           _buildQuantityControls(
@@ -585,8 +583,8 @@ class _MenuItemCard extends StatelessWidget {
                   ],
                 ),
               ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );
@@ -672,37 +670,71 @@ class _MenuItemCard extends StatelessWidget {
     );
   }
 
-  List<Color> _getGradientColors(String category) {
-    switch (category) {
-      case 'Pizza':
-        return [const Color(0xFFFF9A8B), const Color(0xFFFF6B6B)];
-      case 'Pasta':
-        return [const Color(0xFFFBD786), const Color(0xFFF7797D)];
-      case 'Beverages':
-        return [const Color(0xFF89F7FE), const Color(0xFF66A6FF)];
-      case 'Desserts':
-        return [const Color(0xFFA18CD1), const Color(0xFFFBC2EB)];
-      case 'Sides':
-        return [const Color(0xFFFAD961), const Color(0xFFF76B1C)];
+  Color _getItemColor(MenuItem item) {
+    switch (item.id) {
+      case '1':
+        return const Color(0xFFE53935);
+      case '2':
+      case '23':
+        return const Color(0xFFD84315);
+      case '3':
+        return const Color(0xFF4CAF50);
+      case '4':
+        return const Color(0xFFFF6F00);
+      case '5':
+        return const Color(0xFFF44336);
+      case '6':
+        return const Color(0xFFFF7043);
+      case '7':
+        return const Color(0xFFFFC107);
+      case '8':
+        return const Color(0xFF66BB6A);
+      case '9':
+        return const Color(0xFFFFB300);
+      case '10':
+      case '11':
+      case '17':
+        return const Color(0xFF8D6E63);
+      case '12':
+        return const Color(0xFF558B2F);
+      case '13':
+        return const Color(0xFF7CB342);
+      case '14':
+        return const Color(0xFFFFA726);
+      case '15':
+        return const Color(0xFF4E342E);
+      case '16':
+        return const Color(0xFF9CCC65);
+      case '18':
+      case '19':
+        return const Color(0xFFE91E63);
+      case '20':
+        return const Color(0xFF9C27B0);
+      case '21':
+        return const Color(0xFFFF5722);
+      case '22':
+        return const Color(0xFFF9A825);
       default:
-        return [const Color(0xFF667EEA), const Color(0xFF764BA2)];
+        return AppColors.primary;
     }
   }
 
-  String _getFoodEmoji(String category) {
-    switch (category) {
-      case 'Pizza':
-        return '🍕';
-      case 'Pasta':
-        return '🍝';
-      case 'Beverages':
-        return '🥤';
-      case 'Desserts':
-        return '🍰';
-      case 'Sides':
-        return '🍟';
-      default:
-        return '🍽️';
+  IconData _getFoodIcon(MenuItem item) {
+    final name = item.name.toLowerCase();
+    if (item.category == 'pizza') return Icons.local_pizza_rounded;
+    if (name.contains('sushi') || name.contains('salmon')) {
+      return Icons.set_meal_rounded;
     }
+    if (name.contains('ramen')) return Icons.ramen_dining_rounded;
+    if (name.contains('bread')) return Icons.bakery_dining_rounded;
+    if (name.contains('soup')) return Icons.soup_kitchen_rounded;
+    if (name.contains('coffee') || name.contains('latte')) {
+      return Icons.local_cafe_rounded;
+    }
+    if (name.contains('soda')) return Icons.local_bar_rounded;
+    if (item.category == 'desserts') return Icons.cake_rounded;
+    if (item.category == 'combo') return Icons.restaurant_menu_rounded;
+    if (name.contains('fries')) return Icons.fastfood_rounded;
+    return Icons.restaurant_rounded;
   }
 }

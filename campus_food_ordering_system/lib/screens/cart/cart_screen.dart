@@ -462,34 +462,38 @@ class CartScreen extends StatelessWidget {
   }
 
   List<Color> _getGradientColors(String category) {
-    switch (category) {
-      case 'Pizza':
+    switch (category.toLowerCase()) {
+      case 'pizza':
         return [const Color(0xFFFF9A8B), const Color(0xFFFF6B6B)];
-      case 'Pasta':
+      case 'japanese':
         return [const Color(0xFFFBD786), const Color(0xFFF7797D)];
-      case 'Beverages':
+      case 'beverages':
         return [const Color(0xFF89F7FE), const Color(0xFF66A6FF)];
-      case 'Desserts':
+      case 'desserts':
         return [const Color(0xFFA18CD1), const Color(0xFFFBC2EB)];
-      case 'Sides':
+      case 'sides':
         return [const Color(0xFFFAD961), const Color(0xFFF76B1C)];
+      case 'combo':
+        return [const Color(0xFF667EEA), const Color(0xFF764BA2)];
       default:
         return [const Color(0xFF667EEA), const Color(0xFF764BA2)];
     }
   }
 
   String _getFoodEmoji(String category) {
-    switch (category) {
-      case 'Pizza':
+    switch (category.toLowerCase()) {
+      case 'pizza':
         return '🍕';
-      case 'Pasta':
-        return '🍝';
-      case 'Beverages':
-        return '🥤';
-      case 'Desserts':
+      case 'japanese':
+        return '🍣';
+      case 'beverages':
+        return '☕';
+      case 'desserts':
         return '🍰';
-      case 'Sides':
-        return '🍟';
+      case 'sides':
+        return '🥖';
+      case 'combo':
+        return '🍱';
       default:
         return '🍽️';
     }
